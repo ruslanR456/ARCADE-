@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <!-- Load Tailwind CSS for utility classes -->
+         <button onclick="window.location.href='index.html'">
+back
+    </button>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the chess board and pieces */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; /* Dark theme background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .board-container {
+            background-color: #2c2a4a; /* Darker container */
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            padding: 1.5rem;
+            max-width: 90vw;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100%;
+            max-width: 600px; /* Max size for the board */
+            aspect-ratio: 1 / 1; /* Keep it square */
+            border: 4px solid #f4f4f9;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+
+        .square {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: clamp(1.5rem, 6vw, 3rem); /* Responsive piece size */
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            user-select: none;
+        }
+
+        /* Light squares (White pieces' starting color) */
+        .light {
+            background-color: #f0d9b5;
+            color: #1a1a2e;
+        }
+
+        /* Dark squares (Black pieces' starting color) */
+        .dark {
+            background-color: #b58863;
+            color: #f4f4f9;
+        }
+
+        /* Selected square state */
+        .selected {
+            background-color: #ffcc00 !important; /* Bright yellow */
+            transform: scale(0.98);
+        }
+
+        /* Legal move target indication */
+        .legal-move {
+            position: relative;
+            background-color: rgba(100, 255, 100, 0.4) !important; /* Greenish overlay */
+        }
+
+        /* Legal move dot */
+        .legal-move:after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Capture indication */
+        .legal-move:has(.piece):after {
+            content: '';
+            position: absolute;
+            width: 90%;
+            height: 90%;
+            border-radius: 50%;
+            border: 5px solid rgba(255, 50, 50, 0.7); /* Red ring for capture */
+            background-color: transparent;
+        }
+
+        .piece {
+            line-height: 1;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Style for pieces (overriding square color for visibility) */
+        .piece.w {
+            color: #f4f4f9; /* White pieces, bright color */
+        }
+
+        .piece.b {
+            color: #1a1a2e; /* Black pieces, dark color */
+        }
+
+        .message-box {
+            min-height: 4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 1rem;
+        }
+        
+        .reset-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        }
+
+        .reset-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="selection:bg-pink-500 selection:text-white">
+
+    <div class="board-container">
+        <h1 class="text-4xl font-bold text-white mb-6">Simple Chess</h1>
+        
+        <div id="status" class="message-box bg-gray-700/50 text-white rounded-lg w-full max-w-sm mb-4">
+            <p id="turn-message" class="text-xl font-semibold"></p>
+        </div>
+
+        <div id="chessboard">
+            <!-- Squares will be generated here by JavaScript -->
+        </div>
+
+        <button onclick="resetBoard()" class="reset-button mt-6 px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-500 focus:ring-opacity-50">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0110.804 5.378 1 1 0 01-1.011.638 5.002 5.002 0 00-7.18 0 1 1 0 01-1.011-.638A7.002 7.002 0 014 5.101V3a1 1 0 011-1zm1 14a1 1 0 00-1 1v2.101a7.002 7.002 0 0010.804-5.378 1 1 0 00-1.011-.638 5.002 5.002 0 01-7.18 0 1 1 0 00-1.011.638A7.002 7.002 0 004 14.899V17a1 1 0 001 1z" clip-rule="evenodd" />
+            </svg>
+            New Game
+        </button>
+    </div>
+
+    <script>
+        // --- Game State Variables ---
+        let board = [];
+        let currentPlayer = 'w'; // 'w' for White, 'b' for Black
+        let selectedSquare = null; // { row, col } of the selected piece
+        let legalMoves = []; // Array of { row, col } for legal targets
+        let isGameOver = false;
+
+        // --- Piece-to-Unicode Mapping ---
+        const PIECES = {
+            'wK': '&#9812;', 'wQ': '&#9813;', 'wR': '&#9814;', 'wB': '&#9815;', 'wN': '&#9816;', 'wP': '&#9817;',
+            'bK': '&#9818;', 'bQ': '&#9819;', 'bR': '&#9820;', 'bB': '&#9821;', 'bN': '&#9822;', 'bP': '&#9823;',
+            '': '' // Empty square
+        };
+
+        // --- Initial Board Setup ---
+        const INITIAL_BOARD = [
+            ['bR', 'bN', 'bB', 'bQ', 'bK', 'bB', 'bN', 'bR'],
+            ['bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP'],
+            ['wR', 'wN', 'wB', 'wQ', 'wK', 'wB', 'wN', 'wR']
+        ];
+
+        const boardElement = document.getElementById('chessboard');
+        const turnMessageElement = document.getElementById('turn-message');
+
+        // --- Helper Functions ---
+
+        /**
+         * Checks if a position is within the board bounds.
+         * @param {number} row 
+         * @param {number} col 
+         * @returns {boolean}
+         */
+        function isWithinBounds(row, col) {
+            return row >= 0 && row < 8 && col >= 0 && col < 8;
+        }
+
+        /**
+         * Gets the piece string at a given location.
+         * @param {number} row 
+         * @param {number} col 
+         * @returns {string} The piece string (e.g., 'wR', 'bP', '').
+         */
+        function getPiece(row, col) {
+            if (isWithinBounds(row, col)) {
+                return board[row][col];
+            }
+            return null;
+        }
+
+        /**
+         * Clears all visual indicators (selection and legal moves).
+         */
+        function clearIndicators() {
+            document.querySelectorAll('.selected, .legal-move').forEach(el => {
+                el.classList.remove('selected', 'legal-move');
+            });
+            legalMoves = [];
+        }
+
+        // --- Piece Movement Logic (Simplified for single-file implementation) ---
+
+        /**
+         * Determines potential move targets for a piece based on its type.
+         * Note: This function calculates MOVES, but does NOT check if the King is in check,
+         * which is required for full legal move validation in a real game.
+         * @param {number} r Row of the piece.
+         * @param {number} c Column of the piece.
+         * @returns {Array<{row: number, col: number}>} Array of potential move coordinates.
+         */
+        function calculatePotentialMoves(r, c) {
+            const piece = getPiece(r, c);
+            if (!piece) return [];
+
+            const type = piece[1];
+            const color = piece[0];
+            const moves = [];
+
+            // Helper for sliding pieces (Rook, Bishop, Queen)
+            const checkSlide = (dr, dc) => {
+                let row = r + dr;
+                let col = c + dc;
+                while (isWithinBounds(row, col)) {
+                    const targetPiece = getPiece(row, col);
+                    if (targetPiece) {
+                        if (targetPiece[0] !== color) {
+                            moves.push({ row, col }); // Capture
+                        }
+                        break; // Blocked
+                    }
+                    moves.push({ row, col }); // Empty square
+                    row += dr;
+                    col += dc;
+                }
+            };
+
+            // Helper for single-step or jump moves (King, Knight)
+            const checkStep = (dr, dc) => {
+                const row = r + dr;
+                const col = c + dc;
+                if (isWithinBounds(row, col)) {
+                    const targetPiece = getPiece(row, col);
+                    if (!targetPiece || targetPiece[0] !== color) {
+                        moves.push({ row, col });
+                    }
+                }
+            };
+
+            switch (type) {
+                case 'P': // Pawn
+                    const direction = color === 'w' ? -1 : 1;
+                    // Forward one step
+                    checkStep(direction, 0);
+
+                    // Forward two steps (initial move only)
+                    if ((color === 'w' && r === 6) || (color === 'b' && r === 1)) {
+                        const targetRow = r + direction * 2;
+                        if (!getPiece(r + direction, c) && !getPiece(targetRow, c)) {
+                            moves.push({ row: targetRow, col: c });
+                        }
+                    }
+
+                    // Captures (Diagonal)
+                    [-1, 1].forEach(dc => {
+                        const targetRow = r + direction;
+                        const targetCol = c + dc;
+                        if (isWithinBounds(targetRow, targetCol)) {
+                            const targetPiece = getPiece(targetRow, targetCol);
+                            if (targetPiece && targetPiece[0] !== color) {
+                                moves.push({ row: targetRow, col: targetCol });
+                            }
+                        }
+                    });
+                    
+                    // Filter: Pawns cannot move one step forward if blocked
+                    if (moves.some(m => m.row === r + direction && m.col === c)) {
+                        if (getPiece(r + direction, c)) {
+                           // Remove the forward one step move if blocked
+                           const index = moves.findIndex(m => m.row === r + direction && m.col === c);
+                           if (index !== -1) moves.splice(index, 1);
+                        }
+                    }
+                    // Filter: Pawns cannot move two steps forward if blocked
+                    if (moves.some(m => m.row === r + direction * 2 && m.col === c)) {
+                        if (getPiece(r + direction * 2, c)) {
+                           // Remove the forward two step move if blocked
+                           const index = moves.findIndex(m => m.row === r + direction * 2 && m.col === c);
+                           if (index !== -1) moves.splice(index, 1);
+                        }
+                    }
+                    
+                    break;
+
+                case 'R': // Rook
+                    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dr, dc]) => checkSlide(dr, dc));
+                    break;
+
+                case 'B': // Bishop
+                    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([dr, dc]) => checkSlide(dr, dc));
+                    break;
+
+                case 'Q': // Queen
+                    [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([dr, dc]) => checkSlide(dr, dc));
+                    break;
+
+                case 'N': // Knight
+                    [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [1, -2], [-1, 2], [-1, -2]].forEach(([dr, dc]) => checkStep(dr, dc));
+                    break;
+
+                case 'K': // King
+                    [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([dr, dc]) => checkStep(dr, dc));
+                    break;
+            }
+            
+            // Remove moves that go one step forward if the target is an enemy piece (Pawn exception already handled)
+            if (type !== 'P') {
+                for (let i = moves.length - 1; i >= 0; i--) {
+                    const { row, col } = moves[i];
+                    const targetPiece = getPiece(row, col);
+                    if (targetPiece && targetPiece[0] === color) {
+                        moves.splice(i, 1);
+                    }
+                }
+            }
+
+            return moves;
+        }
+
+        // --- Core Game Functions ---
+
+        /**
+         * Handles a click on a square.
+         * @param {number} r Row of the square.
+         * @param {number} c Column of the square.
+         */
+        function handleSquareClick(r, c) {
+            if (isGameOver) return;
+
+            const clickedPiece = getPiece(r, c);
+            const clickedSquare = document.getElementById(`square-${r}-${c}`);
+            const isLegalTarget = legalMoves.some(m => m.row === r && m.col === c);
+
+            if (selectedSquare) {
+                // Case 1: A piece is already selected.
+
+                if (isLegalTarget) {
+                    // Move the piece
+                    movePiece(selectedSquare.row, selectedSquare.col, r, c);
+                    endTurn();
+                } else if (clickedPiece && clickedPiece[0] === currentPlayer) {
+                    // Change selection to a different piece of the current player
+                    selectPiece(r, c);
+                } else {
+                    // Deselect if clicking on an empty/illegal square
+                    clearIndicators();
+                    selectedSquare = null;
+                }
+            } else {
+                // Case 2: No piece is selected.
+
+                if (clickedPiece && clickedPiece[0] === currentPlayer) {
+                    // Select the piece
+                    selectPiece(r, c);
+                }
+                // Ignore if clicking on an empty square or opponent's piece
+            }
+        }
+
+        /**
+         * Selects a piece, highlights it, and shows legal moves.
+         * @param {number} r Row of the piece.
+         * @param {number} c Column of the piece.
+         */
+        function selectPiece(r, c) {
+            clearIndicators();
+            selectedSquare = { row: r, col: c };
+            document.getElementById(`square-${r}-${c}`).classList.add('selected');
+
+            // Calculate and highlight legal moves
+            legalMoves = calculatePotentialMoves(r, c);
+            legalMoves.forEach(move => {
+                document.getElementById(`square-${move.row}-${move.col}`).classList.add('legal-move');
+            });
+        }
+
+        /**
+         * Executes the physical move and updates the board array.
+         * @param {number} fromR Starting row.
+         * @param {number} fromC Starting column.
+         * @param {number} toR Target row.
+         * @param {number} toC Target column.
+         */
+        function movePiece(fromR, fromC, toR, toC) {
+            const movingPiece = board[fromR][fromC];
+
+            // Update board state
+            board[toR][toC] = movingPiece;
+            board[fromR][fromC] = '';
+            
+            // Special rule: Pawn Promotion (simple version: promote to Queen immediately upon reaching last rank)
+            if (movingPiece[1] === 'P' && (toR === 0 || toR === 7)) {
+                board[toR][toC] = movingPiece[0] + 'Q';
+                showMessage(`${movingPiece[0] === 'w' ? 'White' : 'Black'} Pawn promoted to Queen!`);
+            }
+
+            // After the move, update the UI
+            renderBoard();
+        }
+
+        /**
+         * Switches the turn and clears selection/indicators.
+         */
+        function endTurn() {
+            clearIndicators();
+            selectedSquare = null;
+            currentPlayer = currentPlayer === 'w' ? 'b' : 'w';
+            
+            // Update the turn message
+            const turnColor = currentPlayer === 'w' ? 'White' : 'Black';
+            const turnClass = currentPlayer === 'w' ? 'text-yellow-300' : 'text-purple-300';
+
+            turnMessageElement.innerHTML = `<span class="${turnClass}">${turnColor}</span> to move`;
+        }
+
+        /**
+         * Draws the board and pieces onto the HTML grid.
+         */
+        function renderBoard() {
+            boardElement.innerHTML = ''; // Clear previous board
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = board[r][c];
+                    const squareColor = (r + c) % 2 === 0 ? 'light' : 'dark';
+                    const pieceUnicode = PIECES[piece] || '';
+                    const pieceColorClass = piece ? piece[0] : '';
+
+                    const squareEl = document.createElement('div');
+                    squareEl.id = `square-${r}-${c}`;
+                    squareEl.className = `square ${squareColor}`;
+                    squareEl.innerHTML = `<span class="piece ${pieceColorClass}">${pieceUnicode}</span>`;
+
+                    // Attach the click handler
+                    squareEl.onclick = () => handleSquareClick(r, c);
+
+                    boardElement.appendChild(squareEl);
+                }
+            }
+            
+            // Re-apply indicators if a piece is still selected (e.g., after a promotion update)
+            if (selectedSquare) {
+                document.getElementById(`square-${selectedSquare.row}-${selectedSquare.col}`).classList.add('selected');
+                legalMoves.forEach(move => {
+                    document.getElementById(`square-${move.row}-${move.col}`).classList.add('legal-move');
+                });
+            }
+        }
+        
+        /**
+         * Displays a message in the status box.
+         * @param {string} msg 
+         */
+        function showMessage(msg) {
+             turnMessageElement.textContent = msg;
+        }
+
+        /**
+         * Resets the game to the initial state.
+         */
+        window.resetBoard = function() {
+            // Deep copy the initial board state
+            board = INITIAL_BOARD.map(row => [...row]);
+            currentPlayer = 'w';
+            selectedSquare = null;
+            legalMoves = [];
+            isGameOver = false;
+            
+            renderBoard();
+            endTurn(); // Sets up the first turn message correctly
+        }
+
+        // --- Initialization ---
+        window.onload = function() {
+            // Setting up the initial state and rendering the board
+            resetBoard();
+            showMessage("White to move. Click a piece to start!");
+        };
+
+    </script>
+</body>
+</html>

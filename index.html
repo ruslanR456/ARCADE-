@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARCADE 👾</title>
+    <style>
+        :root {
+            --neon-green: #39FF14;
+            --dark-bg: #0d0d1a;
+            --panel-bg: #1a1a2e;
+            --fire-red: #ff4d4d;
+            --water-blue: #4da6ff;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            color: var(--neon-green);
+            text-shadow: 0 0 15px var(--neon-green);
+            margin: 25px 0;
+            letter-spacing: 5px;
+        }
+
+        .logo-img {
+            max-width: 90%;
+            height: auto;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(57, 255, 20, 0.3);
+            margin-bottom: 25px;
+        }
+
+        /* Profile UI */
+        .profile-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .profile-circle {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            border: 3px solid var(--neon-green);
+            background: var(--panel-bg);
+            cursor: pointer;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.5);
+        }
+
+        .profile-circle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 25px var(--neon-green);
+        }
+
+        .profile-circle img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .account-menu {
+            position: absolute;
+            top: 80px;
+            right: 0;
+            background: var(--panel-bg);
+            border: 2px solid var(--neon-green);
+            padding: 20px;
+            border-radius: 15px;
+            display: none;
+            width: 280px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+        }
+
+        .account-menu.active { display: block; }
+
+        .account-menu h3 { margin: 0; color: white; font-size: 1.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .account-status { font-size: 0.85rem; color: var(--neon-green); margin: 5px 0 20px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .btn-auth {
+            width: 100%;
+            background: var(--neon-green);
+            color: black;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 8px;
+            transition: 0.2s;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+        }
+
+        .btn-secondary { background: #333; color: white; border: 1px solid #555; }
+        .btn-logout { background: #ff4444; color: white; margin-top: 15px; }
+        .btn-auth:hover { filter: brightness(1.2); transform: scale(1.02); }
+
+        /* Name Editor */
+        #nameEditor { display: none; margin-top: 10px; }
+        .name-input {
+            width: 100%;
+            background: #0d0d1a;
+            border: 1px solid var(--neon-green);
+            color: white;
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        /* Avatar Selection Area */
+        #avatarSelector {
+            display: none;
+            margin-top: 15px;
+            border-top: 1px solid #444;
+            padding-top: 10px;
+        }
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .avatar-option {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            background: #222;
+            object-fit: cover;
+            transition: 0.2s;
+        }
+        .avatar-option:hover { border-color: var(--neon-green); transform: scale(1.1); }
+        .avatar-option.guest-reset {
+            background: #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.5rem;
+            color: white;
+            font-weight: bold;
+        }
+        .avatar-label { font-size: 0.6rem; color: #888; margin-bottom: 5px; }
+
+        /* Games Grid */
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 30px;
+            padding: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .game-card {
+            background: var(--panel-bg);
+            border: 2px solid #333;
+            border-radius: 20px;
+            padding: 30px;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: white;
+        }
+
+        .game-card:hover {
+            border-color: var(--neon-green);
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(57, 255, 20, 0.3);
+        }
+
+        .game-card .icon-container { width: 110px; height: 110px; margin-bottom: 20px; }
+        .game-card img, .game-card svg { width: 100%; height: 100%; object-fit: contain; }
+        .game-card span { font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
+        
+        #pfp-input { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="profile-container">
+        <div class="profile-circle" id="profileBtn">
+            <img id="userAvatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" alt="Profile">
+        </div>
+        <div class="account-menu" id="accountMenu">
+            <h3 id="displayName">Guest Player</h3>
+            <p id="accountStatus" class="account-status">Offline</p>
+            
+            <div id="authActions">
+                <button class="btn-auth" id="loginBtn">Login with Google</button>
+                <div id="guestControls" style="border-top: 1px solid #333; margin: 15px 0; padding-top: 15px;">
+                    <p style="color: #888; margin-bottom: 10px; font-size: 0.7rem;">GUEST SETTINGS</p>
+                    
+                    <button class="btn-auth btn-secondary" id="guestBtn">Change Name</button>
+                    <div id="nameEditor">
+                        <input type="text" id="newNameInput" class="name-input" placeholder="New Arcade Name..." maxlength="15">
+                        <button class="btn-auth" id="saveNameBtn">Save Name</button>
+                    </div>
+
+                    <button class="btn-auth btn-secondary" id="chooseAvatarBtn">Update Picture</button>
+                    
+                    <!-- Avatar Selection Area -->
+                    <div id="avatarSelector">
+                        <div class="avatar-label">CHOOSE ICON</div>
+                        <div class="avatar-grid">
+                            <!-- Reset to Guest -->
+                            <div class="avatar-option guest-reset" title="Reset to Guest" onclick="resetToGuest()">GUEST</div>
+                            <!-- Minecraft -->
+                            <img class="avatar-option" title="Minecraft" onclick="selectAvatar('Papirus-Team-Papirus-Apps-Minecraft.512.png')" src="Papirus-Team-Papirus-Apps-Minecraft.512.png">
+                            <!-- Chess -->
+                            <img class="avatar-option" title="Chess" onclick="selectAvatar('Gemini_Generated_Image_pq6xqmpq6xqmpq6x.png')" src="Gemini_Generated_Image_pq6xqmpq6xqmpq6x.png">
+                            <!-- Snake -->
+                            <img class="avatar-option" title="Snake" onclick="selectAvatar('Gemini_Generated_Image_co82y3co82y3co82.png')" src="Gemini_Generated_Image_co82y3co82y3co82.png">
+                            <!-- Space Invaders -->
+                            <img class="avatar-option" title="Space Invaders" onclick="selectAvatar('Gemini_Generated_Image_wceyulwceyulwcey.png')" src="Gemini_Generated_Image_wceyulwceyulwcey.png">
+                        </div>
+                        <button class="btn-auth" style="font-size: 0.6rem;" onclick="document.getElementById('pfp-input').click()">Upload Custom</button>
+                    </div>
+
+                    <input type="file" id="pfp-input" accept="image/*">
+                </div>
+            </div>
+            
+            <button class="btn-auth btn-logout" id="logoutBtn" style="display:none;">Sign Out</button>
+        </div>
+    </div>
+
+    <h1>ARCADE 👾</h1>
+    <img src="logo.png" alt="Arcade Logo" class="logo-img" onerror="this.src='https://via.placeholder.com/1320x300/1a1a2e/39FF14?text=NEON+ARCADE+HQ'">
+
+    <div class="game-grid">
+        <a href="EaglercraftX_1.8_u53_Offline_Signed.html" class="game-card">
+            <div class="icon-container">
+                <img src="Papirus-Team-Papirus-Apps-Minecraft.512.png" alt="Minecraft">
+            </div>
+            <span>Minecraft</span>
+        </a>
+
+        <a href="Fireboy_Watergirl_ALL_IN_ONE.html" class="game-card">
+            <div class="icon-container">
+                <svg viewBox="0 0 100 100"><defs><linearGradient id="fireGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#ff9e22" /><stop offset="100%" style="stop-color:#ff4d4d" /></linearGradient><linearGradient id="waterGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#4da6ff" /><stop offset="100%" style="stop-color:#0055ff" /></linearGradient></defs><path d="M48 20 Q30 45 40 65 Q25 80 48 95 L48 20" fill="url(#fireGrad)"/><path d="M52 20 Q70 45 60 65 Q75 80 52 95 L52 20" fill="url(#waterGrad)"/><path d="M50 20 L50 95" stroke="#1a1a2e" stroke-width="4"/></svg>
+            </div>
+            <span>Fire & Water</span>
+        </a>
+
+        <a href="chess.html" class="game-card">
+            <div class="icon-container"><img src="Gemini_Generated_Image_pq6xqmpq6xqmpq6x.png" alt="Chess"></div>
+            <span>Chess</span>
+        </a>
+
+        <a href="snake.html" class="game-card">
+            <div class="icon-container"><img src="Gemini_Generated_Image_co82y3co82y3co82.png" alt="Snake"></div>
+            <span>Snake</span>
+        </a>
+
+        <a href="spaceinvaters.html" class="game-card">
+            <div class="icon-container"><img src="Gemini_Generated_Image_wceyulwceyulwcey.png" alt="Space Invaders"></div>
+            <span>Space Invaders</span>
+        </a>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB0hq9w7WKjS9LxnZ7L5PywBz7QXOFjLlI",
+            authDomain: "arcade-3cbe2.firebaseapp.com",
+            projectId: "arcade-3cbe2",
+            storageBucket: "arcade-3cbe2.firebasestorage.app",
+            messagingSenderId: "608129614651",
+            appId: "1:608129614651:web:16baf0351f9f47d1e3ad1e",
+            measurementId: "G-20GTVWYL00"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        const profileBtn = document.getElementById('profileBtn');
+        const accountMenu = document.getElementById('accountMenu');
+        const userAvatar = document.getElementById('userAvatar');
+        const displayName = document.getElementById('displayName');
+        const accountStatus = document.getElementById('accountStatus');
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const guestBtn = document.getElementById('guestBtn');
+        const pfpInput = document.getElementById('pfp-input');
+        
+        const nameEditor = document.getElementById('nameEditor');
+        const avatarSelector = document.getElementById('avatarSelector');
+        const chooseAvatarBtn = document.getElementById('chooseAvatarBtn');
+        const newNameInput = document.getElementById('newNameInput');
+        const saveNameBtn = document.getElementById('saveNameBtn');
+
+        const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+
+        // Toggle Menus
+        profileBtn.onclick = (e) => {
+            e.stopPropagation();
+            accountMenu.classList.toggle('active');
+            nameEditor.style.display = 'none';
+            avatarSelector.style.display = 'none';
+        };
+
+        chooseAvatarBtn.onclick = () => {
+            avatarSelector.style.display = (avatarSelector.style.display === 'block') ? 'none' : 'block';
+            nameEditor.style.display = 'none';
+        };
+
+        // Function to set avatar
+        window.selectAvatar = (url) => {
+            localStorage.setItem('arcade_pfp', url);
+            if (!auth.currentUser) userAvatar.src = url;
+            avatarSelector.style.display = 'none';
+        };
+
+        // Reset everything back to Guest defaults
+        window.resetToGuest = () => {
+            localStorage.removeItem('arcade_pfp');
+            localStorage.removeItem('arcade_tag');
+            if (!auth.currentUser) {
+                userAvatar.src = DEFAULT_AVATAR;
+                displayName.innerText = "Guest Player";
+            }
+            avatarSelector.style.display = 'none';
+        };
+
+        pfpInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => selectAvatar(event.target.result);
+                reader.readAsDataURL(file);
+            }
+        };
+
+        loginBtn.onclick = async () => {
+            try {
+                await setPersistence(auth, browserLocalPersistence);
+                await signInWithPopup(auth, provider);
+                accountMenu.classList.remove('active');
+            } catch (error) { console.error(error); }
+        };
+
+        guestBtn.onclick = () => {
+            nameEditor.style.display = 'block';
+            avatarSelector.style.display = 'none';
+            newNameInput.value = localStorage.getItem('arcade_tag') || "";
+            newNameInput.focus();
+        };
+
+        const saveNewName = () => {
+            const name = newNameInput.value.trim();
+            if (name) {
+                localStorage.setItem('arcade_tag', name);
+                if (!auth.currentUser) displayName.innerText = name;
+                nameEditor.style.display = 'none';
+            }
+        };
+
+        saveNameBtn.onclick = saveNewName;
+        newNameInput.onkeypress = (e) => { if (e.key === 'Enter') saveNewName(); };
+
+        logoutBtn.onclick = () => { signOut(auth).then(() => location.reload()); };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userAvatar.src = user.photoURL || DEFAULT_AVATAR;
+                displayName.innerText = user.displayName;
+                accountStatus.innerText = "PRO ACCOUNT";
+                loginBtn.style.display = 'none';
+                document.getElementById('guestControls').style.display = 'none';
+                logoutBtn.style.display = 'block';
+            } else {
+                const guestTag = localStorage.getItem('arcade_tag') || "Guest Player";
+                const guestPfp = localStorage.getItem('arcade_pfp') || DEFAULT_AVATAR;
+                displayName.innerText = guestTag;
+                userAvatar.src = guestPfp;
+                accountStatus.innerText = "GUEST PLAYER";
+                loginBtn.style.display = 'block';
+                document.getElementById('guestControls').style.display = 'block';
+                logoutBtn.style.display = 'none';
+            }
+        });
+
+        window.onclick = (e) => {
+            if (!accountMenu.contains(e.target) && !profileBtn.contains(e.target)) {
+                accountMenu.classList.remove('active');
+            }
+        };
+    </script>
+</body>
+</html>

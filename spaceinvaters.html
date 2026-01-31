@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Vaders</title>
+    <!-- Load Tailwind CSS for modern responsive styling -->
+         <button onclick="window.location.href='index.html'">
+back
+    </button>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the game atmosphere */
+        :root {
+            --primary-green: #39FF14; /* Neon green */
+            --dark-space: #1a1a2e; /* Deep purple-blue space background */
+        }
+        body {
+            background-color: #0d0d1a;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        #game-canvas {
+            display: block;
+            background-color: var(--dark-space);
+            border: 4px solid var(--primary-green);
+            box-shadow: 0 0 20px var(--primary-green), inset 0 0 10px var(--primary-green);
+            cursor: crosshair;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+        .text-neon {
+            color: var(--primary-green);
+            text-shadow: 0 0 8px var(--primary-green);
+        }
+        .btn-neon {
+            background-color: var(--primary-green);
+            color: var(--dark-space);
+            font-weight: bold;
+            transition: all 0.1s;
+            border: 2px solid var(--primary-green);
+            box-shadow: 0 0 5px var(--primary-green);
+        }
+        .btn-neon:hover {
+            box-shadow: 0 0 15px var(--primary-green), 0 0 5px var(--primary-green) inset;
+            transform: translateY(-1px);
+        }
+        .btn-neon:active {
+            transform: translateY(1px);
+            box-shadow: 0 0 3px var(--primary-green);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container rounded-xl shadow-2xl p-6 bg-gray-900 border-2 border-gray-700">
+        <h1 class="text-4xl font-extrabold text-center mb-4 text-neon">
+            SPACE VADERS
+        </h1>
+
+        <!-- Game Info Bar -->
+        <div class="flex justify-between items-center mb-4 p-3 bg-gray-800 rounded-lg shadow-inner border-t border-b border-gray-700">
+            <div id="score-display" class="text-xl font-mono text-neon">SCORE: 0</div>
+            <div id="level-display" class="text-xl font-mono text-neon">LEVEL: 1</div>
+            <button id="start-button" class="btn-neon px-4 py-2 rounded-lg text-sm md:text-base">START GAME</button>
+        </div>
+
+        <!-- Canvas Container -->
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+
+        <!-- Game Status / Instructions -->
+        <div id="status-message" class="text-center mt-4 text-gray-400 text-sm">
+            Press the "START GAME" button to begin! Use $\leftarrow \rightarrow$ to move and SPACE to fire.
+        </div>
+
+    </div>
+
+    <script>
+        // Global Constants
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
+        const PLAYER_SPEED = 5;
+        const BULLET_SPEED = 7;
+        const INVADER_ROWS = 5;
+        const INVADER_COLS = 10;
+        const INVADER_SIZE = 30;
+        const INVADER_PADDING = 10;
+        const INVADER_OFFSET_X = 50;
+        const INVADER_OFFSET_Y = 50;
+        const INVADER_MOVE_DISTANCE = 20;
+
+        // Game State Variables
+        let canvas, ctx;
+        let animationFrameId;
+        let gameActive = false;
+        let score = 0;
+        let level = 1;
+
+        // Entities Arrays
+        let player = {};
+        let bullets = [];
+        let invaders = [];
+        let invaderBullets = [];
+        let particles = [];
+
+        // Input Tracking
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            Space: false
+        };
+        let lastFireTime = 0;
+        const fireDelay = 300; // ms between shots
+
+        // Invader Movement
+        let invaderMoveDir = 1; // 1 for right, -1 for left
+        let invaderMoveTimer = 0;
+        let invaderMoveInterval = 1000; // Time in ms before invaders move
+
+        // --- Utility Functions ---
+
+        /**
+         * Converts base64 encoded PCM audio data to a playable WAV Blob.
+         * Note: This function is required for TTS API integration but is not used in this game.
+         * It is included as a best practice boilerplate for API use within Immersives.
+         */
+        function pcmToWav(pcm16, sampleRate = 24000) {
+            const numChannels = 1;
+            const bytesPerSample = 2;
+            const blockAlign = numChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = pcm16.byteLength;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+
+            let offset = 0;
+            function writeString(str) {
+                for (let i = 0; i < str.length; i++) {
+                    view.setUint8(offset + i, str.charCodeAt(i));
+                }
+                offset += str.length;
+            }
+
+            // RIFF chunk
+            writeString('RIFF');
+            view.setUint32(offset, 36 + dataSize, true); offset += 4;
+            writeString('WAVE');
+
+            // fmt chunk
+            writeString('fmt ');
+            view.setUint32(offset, 16, true); offset += 4;      // ChunkSize
+            view.setUint16(offset, 1, true); offset += 2;       // AudioFormat (1 for PCM)
+            view.setUint16(offset, numChannels, true); offset += 2; // NumChannels
+            view.setUint32(offset, sampleRate, true); offset += 4;  // SampleRate
+            view.setUint32(offset, byteRate, true); offset += 4;    // ByteRate
+            view.setUint16(offset, blockAlign, true); offset += 2;  // BlockAlign
+            view.setUint16(offset, 16, true); offset += 2;      // BitsPerSample
+
+            // data chunk
+            writeString('data');
+            view.setUint32(offset, dataSize, true); offset += 4; // ChunkSize
+
+            // Write PCM data
+            const pcm8 = new Uint8Array(pcm16.buffer);
+            for (let i = 0; i < pcm8.byteLength; i++) {
+                view.setUint8(offset + i, pcm8[i]);
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+
+        /**
+         * Simple AABB collision detection
+         */
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.w &&
+                   rect1.x + rect1.w > rect2.x &&
+                   rect1.y < rect2.y + rect2.h &&
+                   rect1.y + rect1.h > rect2.y;
+        }
+
+        // --- Game Entities ---
+
+        function createPlayer() {
+            return {
+                w: 50,
+                h: 20,
+                x: CANVAS_WIDTH / 2 - 25,
+                y: CANVAS_HEIGHT - 40,
+                color: '#39FF14', // Fixed: Replaced var(--primary-green) with hex string
+                // life and regenoracion 
+                lives: 999,
+                isHit: false // life or death regenoracion
+            };
+        }
+
+        function createInvader(col, row) {
+            return {
+                x: col * (INVADER_SIZE + INVADER_PADDING) + INVADER_OFFSET_X,
+                y: row * (INVADER_SIZE + INVADER_PADDING) + INVADER_OFFSET_Y,
+                w: INVADER_SIZE,
+                h: INVADER_SIZE * 0.7,
+                color: (row < 2) ? '#FF4136' : (row < 4 ? '#FF851B' : '#FFDC00'), // Different colors for rows
+                points: (INVADER_ROWS - row) * 10
+            };
+        }
+
+        function createBullet(x, y, isPlayer, color) {
+            return {
+                x: x,
+                y: y,
+                w: 4,
+                h: 12,
+                vy: isPlayer ? -BULLET_SPEED : BULLET_SPEED / 2,
+                color: color || '#FFFFFF',
+                isPlayer: isPlayer
+            };
+        }
+
+        function createParticle(x, y, color) {
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = Math.random() * 2 + 1;
+            return {
+                x,
+                y,
+                vx: Math.cos(angle) * velocity,
+                vy: Math.sin(angle) * velocity,
+                color,
+                size: Math.random() * 3 + 1,
+                alpha: 1,
+                decay: 0.05
+            };
+        }
+
+        // --- Initialization and Reset ---
+
+        function initializeGame() {
+            canvas = document.getElementById('game-canvas');
+            ctx = canvas.getContext('2d');
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
+
+            document.getElementById('start-button').addEventListener('click', startGame);
+
+            // Setup Event Listeners
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+            // Handle touch input for mobile (simple tap to fire, left/right zones to move)
+            canvas.addEventListener('touchstart', handleTouchStart);
+            canvas.addEventListener('touchend', handleTouchEnd);
+        }
+          // levels and other
+        function resetGame() {
+            score = 0;
+            level = 1;
+            player = createPlayer();
+            bullets = [];
+            invaderBullets = [];
+            particles = [];
+            invaderMoveDir = 1;
+            invaderMoveTimer = 0;
+            spawnInvaders();
+            updateDisplay();
+            showStatus('Use $\leftarrow \rightarrow$ to move and SPACE to fire.', 'text-gray-400');
+            document.getElementById('start-button').textContent = 'RESTART GAME';
+        }
+
+        function spawnInvaders() {
+            invaders = [];
+            for (let row = 0; row < INVADER_ROWS; row++) {
+                for (let col = 0; col < INVADER_COLS; col++) {
+                    invaders.push(createInvader(col, row));
+                }
+            }
+            // Adjust movement interval based on level
+            invaderMoveInterval = Math.max(200, 1000 - (level - 1) * 100);
+        }
+
+        function startGame() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            resetGame();
+            gameActive = true;
+            animate();
+        }
+
+        // --- Input Handlers ---
+
+        function handleKeyDown(e) {
+            if (keys.hasOwnProperty(e.code)) {
+                keys[e.code] = true;
+                e.preventDefault();
+            }
+        }
+
+        function handleKeyUp(e) {
+            if (keys.hasOwnProperty(e.code)) {
+                keys[e.code] = false;
+                e.preventDefault();
+            }
+        }
+
+        // Simple touch controls
+        let touchStartPos = null;
+        let touchTimer = null;
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touchX = e.touches[0].clientX;
+            const rect = canvas.getBoundingClientRect();
+            const gameX = touchX - rect.left;
+
+            // Touch Zones (Relative to canvas width)
+            const leftZone = CANVAS_WIDTH * 0.3;
+            const rightZone = CANVAS_WIDTH * 0.7;
+
+            // Simple movement based on touch start position
+            if (gameX < leftZone) {
+                keys.ArrowLeft = true;
+                keys.ArrowRight = false;
+            } else if (gameX > rightZone) {
+                keys.ArrowRight = true;
+                keys.ArrowLeft = false;
+            } else {
+                // Center zone for firing
+                keys.Space = true;
+            }
+
+            // Start a timer to stop movement after a short delay or on touchend
+            touchTimer = setTimeout(() => {
+                keys.ArrowLeft = false;
+                keys.ArrowRight = false;
+            }, 100);
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            keys.ArrowLeft = false;
+            keys.ArrowRight = false;
+            keys.Space = false;
+            if (touchTimer) clearTimeout(touchTimer);
+        }
+
+        // --- Drawing Functions ---
+
+        function drawPlayer() {
+            if (player.isHit) {
+                // Blink effect when hit
+                if (Math.floor(Date.now() / 100) % 2 === 0) return;
+            }
+
+            ctx.fillStyle = player.color;
+
+            // Main body
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+
+            // Cannon
+            ctx.fillRect(player.x + player.w / 2 - 4, player.y - 10, 8, 10);
+        }
+
+        function drawInvader(invader) {
+            ctx.fillStyle = invader.color;
+            ctx.beginPath();
+            // Simple geometric invader shape (a block with a 'head')
+            const x = invader.x;
+            const y = invader.y;
+            const w = invader.w;
+            const h = invader.h;
+
+            // Main body
+            ctx.fillRect(x, y + h * 0.3, w, h * 0.7);
+            // Head/Top part (trapezoid/triangle)
+            ctx.moveTo(x, y + h * 0.3);
+            ctx.lineTo(x + w, y + h * 0.3);
+            ctx.lineTo(x + w * 0.8, y);
+            ctx.lineTo(x + w * 0.2, y);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawBullet(bullet) {
+            ctx.fillStyle = bullet.color;
+            ctx.fillRect(bullet.x, bullet.y, bullet.w, bullet.h);
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                // Using the actual color values here since CSS variables aren't directly available in Canvas JS
+                ctx.fillStyle = `rgba(${p.color === '#FF4136' ? '255, 65, 54' : '57, 255, 20'}, ${p.alpha})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawAll() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            drawParticles();
+            drawPlayer();
+            invaders.forEach(drawInvader);
+            bullets.forEach(drawBullet);
+            invaderBullets.forEach(drawBullet);
+
+            // Draw lives
+            ctx.fillStyle = '#39FF14'; // Fixed: Replaced var(--primary-green) with hex string
+            ctx.font = '16px Monospace';
+            ctx.fillText(`LIVES: ${player.lives}`, 10, CANVAS_HEIGHT - 10);
+        }
+
+        // --- Update Logic ---
+
+        function updatePlayer(deltaTime) {
+            if (keys.ArrowLeft) {
+                player.x = Math.max(player.x - PLAYER_SPEED, 0);
+            }
+            if (keys.ArrowRight) {
+                player.x = Math.min(player.x + PLAYER_SPEED, CANVAS_WIDTH - player.w);
+            }
+            if (keys.Space) {
+                playerFire();
+            }
+        }
+
+        function playerFire() {
+            const now = Date.now();
+            if (now - lastFireTime > fireDelay) {
+                const newBullet = createBullet(player.x + player.w / 2 - 2, player.y - 15, true, '#39FF14'); // Fixed: Replaced var(--primary-green) with hex string
+                bullets.push(newBullet);
+                lastFireTime = now;
+            }
+        }
+
+        function updateBullets() {
+            // Move player bullets
+            bullets.forEach(b => b.y += b.vy);
+            bullets = bullets.filter(b => b.y > -b.h); // Filter out off-screen
+
+            // Move invader bullets
+            invaderBullets.forEach(b => b.y += b.vy);
+            invaderBullets = invaderBullets.filter(b => b.y < CANVAS_HEIGHT); // Filter out off-screen
+        }
+
+        function updateInvaders(deltaTime) {
+            invaderMoveTimer += deltaTime;
+            let moveY = 0;
+            let shouldDescend = false;
+            let hitEdge = false;
+
+            // Check if invaders hit the edge
+            invaders.forEach(invader => {
+                if (invader.x + invader.w > CANVAS_WIDTH - 10 && invaderMoveDir === 1) {
+                    hitEdge = true;
+                }
+                if (invader.x < 10 && invaderMoveDir === -1) {
+                    hitEdge = true;
+                }
+            });
+
+            if (hitEdge) {
+                invaderMoveDir *= -1; // Reverse direction
+                shouldDescend = true; // Move down
+            }
+
+            if (invaderMoveTimer >= invaderMoveInterval) {
+                invaderMoveTimer = 0;
+                moveY = shouldDescend ? INVADER_MOVE_DISTANCE : 0;
+                let moveX = INVADER_MOVE_DISTANCE * invaderMoveDir;
+
+                invaders.forEach(invader => {
+                    invader.x += moveX;
+                    invader.y += moveY;
+
+                    // Check for game over condition (invaders reaching player line)
+                    if (invader.y + invader.h > player.y) {
+                        endGame('GAME OVER! The Vaders have invaded the Earth!', 'text-red-500');
+                    }
+                });
+            }
+
+            // Invader firing (based on level)
+            if (Math.random() < 0.005 * level) { // Fire chance per frame
+                const firingInvader = invaders[Math.floor(Math.random() * invaders.length)];
+                if (firingInvader) {
+                    const newBullet = createBullet(
+                        firingInvader.x + firingInvader.w / 2 - 2,
+                        firingInvader.y + firingInvader.h + 5,
+                        false,
+                        '#FF0000' // Red
+                    );
+                    invaderBullets.push(newBullet);
+                }
+            }
+        }
+
+        function updateCollisions() {
+            // Player Bullet vs Invader
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                if (!bullet.isPlayer) continue;
+
+                for (let j = invaders.length - 1; j >= 0; j--) {
+                    const invader = invaders[j];
+                    if (checkCollision(bullet, invader)) {
+                        // Explosion particles
+                        for (let k = 0; k < 10; k++) {
+                            particles.push(createParticle(invader.x + invader.w / 2, invader.y + invader.h / 2, invader.color));
+                        }
+                        score += invader.points;
+                        invaders.splice(j, 1);
+                        bullets.splice(i, 1);
+                        updateDisplay();
+                        break; // Move to the next bullet
+                    }
+                }
+            }
+
+            // Invader Bullet vs Player
+            if (!player.isHit) {
+                for (let i = invaderBullets.length - 1; i >= 0; i--) {
+                    const bullet = invaderBullets[i];
+                    if (checkCollision(bullet, player)) {
+                        player.lives--;
+                        player.isHit = true;
+                        setTimeout(() => player.isHit = false, 1500); // Invulnerability window
+                        invaderBullets.splice(i, 1);
+                        updateDisplay();
+                        if (player.lives <= 0) {
+                            endGame('GAME OVER! Your ship was destroyed.', 'text-red-500');
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Particle decay
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= p.decay;
+                p.size *= 0.98;
+            });
+            particles = particles.filter(p => p.alpha > p.decay && p.size > 0.5);
+        }
+
+        function checkWinCondition() {
+            if (invaders.length === 0) {
+                level++;
+                showStatus(`WAVE CLEARED! Advancing to Level ${level}.`, 'text-neon');
+                // Give player a brief moment to breathe before the next wave starts
+                gameActive = false;
+                setTimeout(() => {
+                    spawnInvaders();
+                    gameActive = true;
+                }, 2000);
+            }
+        }
+
+        // --- Game Loop and UI ---
+
+        let lastTime = 0;
+        function animate(currentTime) {
+            if (!gameActive) {
+                animationFrameId = requestAnimationFrame(animate);
+                return;
+            }
+
+            // Calculate Delta Time in ms
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Update Game State
+            updatePlayer(deltaTime);
+            updateInvaders(deltaTime);
+            updateBullets();
+            updateCollisions();
+            checkWinCondition();
+
+            // Draw
+            drawAll();
+
+            // Loop
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        function updateDisplay() {
+            document.getElementById('score-display').textContent = `SCORE: ${score}`;
+            document.getElementById('level-display').textContent = `LEVEL: ${level}`;
+        }
+
+        function showStatus(message, styleClass) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.textContent = message;
+            statusDiv.className = `text-center mt-4 text-sm ${styleClass} font-bold`;
+        }
+
+        function endGame(message, styleClass) {
+            gameActive = false;
+            cancelAnimationFrame(animationFrameId);
+            showStatus(message + ' Press RESTART GAME to play again.', styleClass);
+        }
+
+        // Initialize on window load
+        window.onload = initializeGame;
+
+    </script>
+</body>
+</html>

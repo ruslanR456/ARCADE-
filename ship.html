@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battleship</title>
+    <!-- Load Tailwind CSS for utility classes -->
+         <button onclick="window.location.href='index.html'">
+back
+    </button>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the Battleship board */
+        :root {
+            --board-size: 10;
+            --cell-size: 32px;
+            --water-color: #3b82f6; /* Blue-500 */
+            --ship-color: #4b5563; /* Gray-600 */
+            --hit-color: #ef4444; /* Red-500 */
+            --miss-color: #9ca3af; /* Gray-400 */
+            --bg-dark: #1f2937; /* Dark background */
+            --text-light: #f9fafb; /* White text */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            max-width: 1000px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            background: #2c3e50; /* A slightly lighter dark background */
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .board-grid {
+            display: grid;
+            grid-template-columns: repeat(var(--board-size), var(--cell-size));
+            grid-template-rows: repeat(var(--board-size), var(--cell-size));
+            border: 4px solid var(--water-color);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+        }
+
+        /* Adjust cell size for smaller screens */
+        @media (max-width: 768px) {
+            :root {
+                --cell-size: 26px;
+            }
+            .board-grid {
+                width: fit-content;
+                margin: 0 auto;
+            }
+        }
+        @media (max-width: 480px) {
+            :root {
+                --cell-size: 20px;
+            }
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            background-color: var(--water-color);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s, transform 0.1s;
+            position: relative;
+        }
+
+        /* Player board cells (no interaction needed) */
+        #player-board .cell {
+            cursor: default;
+        }
+
+        /* Hover effect for the opponent board (where you shoot) */
+        #opponent-board .cell:not(.hit):not(.miss):hover {
+            background-color: #2563eb; /* Blue-600 */
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        /* Visual states */
+        .cell.ship {
+            background-color: var(--ship-color);
+        }
+
+        .cell.hit {
+            background-color: var(--hit-color);
+            animation: pulse-red 0.5s infinite alternate;
+        }
+
+        .cell.miss::after {
+            content: '•';
+            color: var(--miss-color);
+            font-size: calc(var(--cell-size) * 0.7);
+            line-height: 0;
+            opacity: 0.8;
+            pointer-events: none; /* Prevents cursor changing over the dot */
+        }
+        
+        @keyframes pulse-red {
+            from { box-shadow: 0 0 5px var(--hit-color); }
+            to { box-shadow: 0 0 15px var(--hit-color); }
+        }
+
+        .game-status {
+            min-height: 80px;
+            border-radius: 8px;
+            padding: 15px;
+            background: #374151;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1 class="text-4xl font-extrabold text-center text-yellow-300 mb-4 tracking-wider">BATTLESHIP</h1>
+
+        <div id="game-status" class="game-status text-center text-lg font-semibold transition duration-300 ease-in-out">
+            Click "Start Game" to begin the battle!
+        </div>
+
+        <div class="flex flex-col md:flex-row justify-between gap-6">
+            <!-- Opponent's Board (Where the player attacks) -->
+            <div class="flex-1 min-w-0">
+                <h2 class="text-xl font-bold mb-2 text-red-300">Target Grid (Opponent)</h2>
+                <div id="opponent-board" class="board-grid mx-auto">
+                    <!-- Cells will be inserted by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Player's Board (Where the opponent attacks) -->
+            <div class="flex-1 min-w-0">
+                <h2 class="text-xl font-bold mb-2 text-green-300">Your Fleet</h2>
+                <div id="player-board" class="board-grid mx-auto">
+                    <!-- Cells will be inserted by JavaScript -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="mt-4 flex flex-wrap justify-center gap-4">
+            <button id="start-button" onclick="startGame()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-xl transition transform hover:scale-105 active:scale-95">
+                Start Game
+            </button>
+            <button id="reset-button" onclick="initGame()" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-xl transition transform hover:scale-105 active:scale-95" disabled>
+                Reset Board
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const BOARD_SIZE = 10;
+        const SHIPS = [
+            { name: "Carrier", length: 5, hits: 0 },
+            { name: "Battleship", length: 4, hits: 0 },
+            { name: "Cruiser", length: 3, hits: 0 },
+            { name: "Submarine", length: 3, hits: 0 },
+            { name: "Destroyer", length: 2, hits: 0 },
+        ];
+
+        // Deep copy of ships for each player
+        let playerShips;
+        let opponentShips;
+
+        let playerBoard = [];
+        let opponentBoard = [];
+        
+        let isPlayerTurn = false;
+        let gameActive = false;
+        
+        let availableOpponentShots = []; // For simple AI to track available targets
+
+        const $ = selector => document.querySelector(selector);
+        const $playerBoard = $('#player-board');
+        const $opponentBoard = $('#opponent-board');
+        const $gameStatus = $('#game-status');
+        const $startButton = $('#start-button');
+        const $resetButton = $('#reset-button');
+
+        // --- Core Game Setup ---
+
+        /**
+         * Creates a new, empty board grid.
+         * Board state: 
+         * 0: Water (unhit)
+         * 1: Ship (unhit)
+         * 2: Miss (hit water)
+         * 3: Hit (hit ship)
+         */
+        function createBoard() {
+            return Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0));
+        }
+
+        /**
+         * Generates the initial HTML grid for a board.
+         * @param {HTMLElement} container The board container element.
+         * @param {string} boardId 'player' or 'opponent'.
+         */
+        function renderEmptyBoard(container, boardId) {
+            container.innerHTML = '';
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    
+                    if (boardId === 'opponent') {
+                        cell.addEventListener('click', handlePlayerShot);
+                    }
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        /**
+         * Updates the visual state of the cells based on the game board data.
+         * @param {HTMLElement} container The board container element.
+         * @param {Array<Array<number>>} boardData The 2D array representing the board state.
+         * @param {boolean} showShips If true, shows the location of ships (for player's own board).
+         */
+        function updateBoardVisuals(container, boardData, showShips) {
+            const cells = container.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+                const state = boardData[r][c];
+
+                cell.className = 'cell'; // Reset classes
+                
+                // State 1: Ship (only shown if showShips is true or on opponent board for debugging)
+                if (state === 1 && showShips) {
+                    cell.classList.add('ship');
+                }
+                // State 2: Miss
+                else if (state === 2) {
+                    cell.classList.add('miss');
+                }
+                // State 3: Hit
+                else if (state === 3) {
+                    cell.classList.add('hit');
+                    // If it was a ship, and we are showing it (player board), also show ship style
+                    if (showShips) {
+                        cell.classList.add('ship');
+                    }
+                }
+                // If it's a ship and showShips is false (opponent board before hit), it remains blue/water.
+                
+                // Add hover/click only for opponent board
+                if (container.id === 'opponent-board' && state !== 2 && state !== 3 && gameActive && isPlayerTurn) {
+                    cell.style.cursor = 'pointer';
+                } else {
+                    cell.style.cursor = 'default';
+                }
+            });
+        }
+
+        /**
+         * Attempts to place a ship randomly on the board.
+         * @param {Array<Array<number>>} board The board to place the ship on.
+         * @param {object} ship The ship object {name, length}.
+         * @returns {boolean} True if placement was successful.
+         */
+        function placeShipRandomly(board, ship) {
+            const directions = ['horizontal', 'vertical'];
+            const maxAttempts = 500;
+            let attempts = 0;
+
+            while (attempts < maxAttempts) {
+                const direction = directions[Math.floor(Math.random() * 2)];
+                const rStart = Math.floor(Math.random() * BOARD_SIZE);
+                const cStart = Math.floor(Math.random() * BOARD_SIZE);
+
+                let isOccupied = false;
+
+                // Check bounds and collision
+                if (direction === 'horizontal') {
+                    if (cStart + ship.length > BOARD_SIZE) {
+                        attempts++;
+                        continue;
+                    }
+                    for (let i = 0; i < ship.length; i++) {
+                        if (board[rStart][cStart + i] !== 0) {
+                            isOccupied = true;
+                            break;
+                        }
+                    }
+                } else { // vertical
+                    if (rStart + ship.length > BOARD_SIZE) {
+                        attempts++;
+                        continue;
+                    }
+                    for (let i = 0; i < ship.length; i++) {
+                        if (board[rStart + i][cStart] !== 0) {
+                            isOccupied = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!isOccupied) {
+                    // Place the ship
+                    for (let i = 0; i < ship.length; i++) {
+                        if (direction === 'horizontal') {
+                            board[rStart][cStart + i] = 1; // 1 means ship
+                        } else {
+                            board[rStart + i][cStart] = 1;
+                        }
+                    }
+                    // Store placement info (optional but useful for ship sinking check)
+                    ship.location = { rStart, cStart, direction };
+                    return true;
+                }
+                attempts++;
+            }
+            console.error(`Failed to place ${ship.name} after ${maxAttempts} attempts.`);
+            return false;
+        }
+
+
+        // --- Game Logic ---
+
+        /**
+         * Checks if a ship has been sunk.
+         * @param {Array<Array<number>>} board The board array.
+         * @param {object} ship The ship object.
+         * @returns {boolean} True if the ship is sunk.
+         */
+        function isShipSunk(ship) {
+            return ship.hits >= ship.length;
+        }
+
+        /**
+         * Checks if a player has won the game.
+         * @param {Array<object>} opponentShipsList The list of the opponent's ships.
+         * @returns {boolean} True if all opponent ships are sunk.
+         */
+        function checkGameOver(opponentShipsList) {
+            const sunkenCount = opponentShipsList.filter(isShipSunk).length;
+            return sunkenCount === opponentShipsList.length;
+        }
+
+        /**
+         * Handles the player's shot on the opponent's board.
+         */
+        function handlePlayerShot(event) {
+            if (!gameActive || !isPlayerTurn) return;
+
+            const r = parseInt(event.target.dataset.row);
+            const c = parseInt(event.target.dataset.col);
+
+            const cellState = opponentBoard[r][c];
+
+            // Check if the cell has already been shot at (Miss=2 or Hit=3)
+            if (cellState === 2 || cellState === 3) {
+                $gameStatus.textContent = "You've already shot there! Try another location.";
+                return;
+            }
+
+            let message = '';
+            
+            // 1 means ship (unhit), 0 means water (unhit)
+            if (cellState === 1) {
+                opponentBoard[r][c] = 3; // Hit
+                
+                // Find the ship that was hit and increment its hit counter
+                let hitShip = null;
+                for (const ship of opponentShips) {
+                    if (!isShipSunk(ship)) {
+                        // Simple check: iterate over potential ship locations
+                        for (let i = 0; i < ship.length; i++) {
+                            let shipR = ship.location.direction === 'vertical' ? ship.location.rStart + i : ship.location.rStart;
+                            let shipC = ship.location.direction === 'horizontal' ? ship.location.cStart + i : ship.location.cStart;
+
+                            if (shipR === r && shipC === c) {
+                                ship.hits++;
+                                hitShip = ship;
+                                break;
+                            }
+                        }
+                    }
+                    if (hitShip) break;
+                }
+                
+                if (hitShip) {
+                    if (isShipSunk(hitShip)) {
+                        message = `*** DIRECT HIT! You sunk the opponent's ${hitShip.name}! ***`;
+                    } else {
+                        message = 'Hit! Enemy vessel damaged.';
+                    }
+                } else {
+                    // Should not happen if placement logic is correct, but handles a missed ship identification
+                    message = 'Hit! Something is damaged.';
+                }
+
+                updateBoardVisuals($opponentBoard, opponentBoard, false);
+
+                if (checkGameOver(opponentShips)) {
+                    endGame("You Win!");
+                    return;
+                }
+                
+                // Player gets another turn on a hit
+                $gameStatus.textContent = `${message} Fire again!`;
+            } else if (cellState === 0) {
+                opponentBoard[r][c] = 2; // Miss
+                message = 'Miss! The shell landed in the water.';
+                $gameStatus.textContent = `${message} Opponent's turn...`;
+                updateBoardVisuals($opponentBoard, opponentBoard, false);
+                
+                isPlayerTurn = false;
+                setTimeout(handleAIShot, 1000); // Opponent takes turn after 1 second
+            }
+        }
+
+        /**
+         * Handles the opponent's random shot on the player's board (simple AI).
+         */
+        function handleAIShot() {
+            if (!gameActive || isPlayerTurn) return;
+
+            let r, c;
+            
+            // Pick a random unshot cell
+            if (availableOpponentShots.length === 0) {
+                // If somehow the list is empty (shouldn't happen until end of game), repopulate all unshot spots
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (playerBoard[i][j] !== 2 && playerBoard[i][j] !== 3) {
+                             availableOpponentShots.push({r: i, c: j});
+                        }
+                    }
+                }
+            }
+            
+            // Choose a random available shot
+            const shotIndex = Math.floor(Math.random() * availableOpponentShots.length);
+            const shot = availableOpponentShots.splice(shotIndex, 1)[0];
+            r = shot.r;
+            c = shot.c;
+
+            const cellState = playerBoard[r][c];
+            let message = "Opponent Fired! ";
+            let isHit = false;
+
+            // 1 means ship (unhit), 0 means water (unhit)
+            if (cellState === 1) {
+                playerBoard[r][c] = 3; // Hit
+                isHit = true;
+                
+                // Find the ship that was hit and increment its hit counter
+                let hitShip = null;
+                for (const ship of playerShips) {
+                    if (!isShipSunk(ship)) {
+                        // Simple check: iterate over potential ship locations
+                        for (let i = 0; i < ship.length; i++) {
+                            let shipR = ship.location.direction === 'vertical' ? ship.location.rStart + i : ship.location.rStart;
+                            let shipC = ship.location.direction === 'horizontal' ? ship.location.cStart + i : ship.location.cStart;
+
+                            if (shipR === r && shipC === c) {
+                                ship.hits++;
+                                hitShip = ship;
+                                break;
+                            }
+                        }
+                    }
+                    if (hitShip) break;
+                }
+
+                if (hitShip) {
+                    if (isShipSunk(hitShip)) {
+                        message += `They sunk your ${hitShip.name}!`;
+                    } else {
+                        message += 'Your ship was hit!';
+                    }
+                } else {
+                    message += 'You were hit!';
+                }
+                
+                updateBoardVisuals($playerBoard, playerBoard, true);
+
+                if (checkGameOver(playerShips)) {
+                    endGame("You Lose!");
+                    return;
+                }
+            } else if (cellState === 0) {
+                playerBoard[r][c] = 2; // Miss
+                message += 'They missed.';
+                updateBoardVisuals($playerBoard, playerBoard, true);
+            }
+            
+            $gameStatus.textContent = message;
+            
+            // If AI hit, it takes another turn (simple AI implementation)
+            if (isHit) {
+                setTimeout(handleAIShot, 1000); 
+            } else {
+                // Turn switches back to player
+                isPlayerTurn = true;
+                $gameStatus.textContent += " Your turn to fire!";
+            }
+        }
+
+        /**
+         * Ends the game and displays the final message.
+         * @param {string} result "You Win!" or "You Lose!"
+         */
+        function endGame(result) {
+            gameActive = false;
+            isPlayerTurn = false;
+            $gameStatus.textContent = `*** GAME OVER: ${result} *** Click Reset Board to play again.`;
+            $startButton.disabled = true;
+            $resetButton.disabled = false;
+        }
+
+
+        // --- Initialization and Flow ---
+
+        /**
+         * Initializes the game state, boards, and ships.
+         */
+        function initGame() {
+            // Reset game state
+            gameActive = false;
+            isPlayerTurn = false;
+            
+            // Deep copy ships to reset hit counts
+            playerShips = JSON.parse(JSON.stringify(SHIPS));
+            opponentShips = JSON.parse(JSON.stringify(SHIPS));
+
+            // Create and place ships on boards
+            playerBoard = createBoard();
+            opponentBoard = createBoard();
+            
+            // Place player ships
+            for(const ship of playerShips) {
+                placeShipRandomly(playerBoard, ship);
+            }
+
+            // Place opponent ships
+            for(const ship of opponentShips) {
+                placeShipRandomly(opponentBoard, ship);
+            }
+
+            // Prepare AI shot list
+            availableOpponentShots = [];
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    availableOpponentShots.push({r, c});
+                }
+            }
+
+            // Render boards
+            renderEmptyBoard($playerBoard, 'player');
+            renderEmptyBoard($opponentBoard, 'opponent');
+            
+            // Show player's ships (true)
+            updateBoardVisuals($playerBoard, playerBoard, true);
+            
+            // Hide opponent's ships (false)
+            updateBoardVisuals($opponentBoard, opponentBoard, false);
+            
+            $gameStatus.textContent = "Boards are set. Click Start Game when ready!";
+            $startButton.disabled = false;
+            $resetButton.disabled = true;
+        }
+
+        /**
+         * Starts the game, enabling player input.
+         */
+        function startGame() {
+            gameActive = true;
+            isPlayerTurn = true; // Player goes first
+            $gameStatus.textContent = "Battle started! Your turn. Click on the Target Grid to fire!";
+            $startButton.disabled = true;
+            $resetButton.disabled = false;
+            updateBoardVisuals($opponentBoard, opponentBoard, false); // Enable pointer cursor
+        }
+
+        // Initialize the game when the window loads
+        window.onload = initGame;
+
+    </script>
+</body>
+</html>

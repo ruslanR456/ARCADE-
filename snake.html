@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic Snake Game</title>
+    <button onclick="window.location.href='index.html'">
+back
+    </button>
+    <style>
+        /* Import a retro arcade font */
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        body {
+            /* Center the game vertically and horizontally */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+            font-family: 'Press Start 2P', cursive;
+            color: #ccff00; /* Neon Green */
+            padding: 20px;
+        } /**
+         * 1. Unique Application Identifier
+         * Used to scope your game data in Firestore: /artifacts/{__app_id}/...
+         */
+        
+
+        .game-container {
+            background-color: #000;
+            padding: 20px;
+            border: 5px solid #ccff00;
+            box-shadow: 0 0 20px rgba(204, 255, 0, 0.7);
+            border-radius: 10px;
+            text-align: center;
+            max-width: 90vw;
+            user-select: none; /* Prevent accidental selection on touch/click */
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: #ccff00;
+        }
+
+        #gameCanvas {
+            border: 2px solid #333;
+            background-color: #222;
+            display: block;
+            margin: 0 auto 20px;
+            /* Ensure the canvas scales down on smaller screens */
+            max-width: 100%;
+            height: auto;
+            image-rendering: pixelated; /* Sharp pixels for a retro look */
+        }
+
+        .score-board {
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #messageBox {
+            color: #ff0077; /* Neon Pink for alerts/messages */
+            font-size: 0.9rem;
+            min-height: 20px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            /* Style for the classic game button */
+            background-color: #0088aa;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-transform: uppercase;
+            cursor: pointer;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.8rem;
+            border-radius: 5px;
+            box-shadow: 0 4px #005577; /* 3D effect */
+            transition: all 0.1s;
+        }
+
+        button:active {
+            box-shadow: 0 0 #005577;
+            transform: translateY(4px); /* Press down effect */
+        }
+
+        .mobile-controls {
+            margin-top: 15px;
+            font-size: 0.7rem;
+            color: #0088aa;
+        }
+
+        /* Responsive adjustments for mobile */
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.2rem;
+            }
+            .game-container {
+                padding: 10px;
+                border-width: 3px;
+            }
+            .score-board, #messageBox, button, .mobile-controls {
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <h1>🐍 Classic Arcade Snake 🍎</h1>
+    <div class="score-board">
+        Score: <span id="score">0</span>
+    </div>
+    <!-- The canvas is 400x400, divided into a 20x20 grid -->
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div class="controls-panel">
+        <div id="messageBox">Press Start Game to begin!</div>
+        <button id="startButton">Start Game</button>
+        <div class="mobile-controls">
+            Use **Arrow Keys** to move the snake.
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const messageBox = document.getElementById('messageBox');
+        const startButton = document.getElementById('startButton');
+
+        // --- Game Constants ---
+        const GRID_SIZE = 20; // 20x20 grid
+        const BLOCK_SIZE = canvas.width / GRID_SIZE; // 400 / 20 = 20 pixels per block
+        const GAME_SPEED_MS = 100; // Time interval for game loop (10 frames per second)
+
+        // --- Game State Variables ---
+        let snake = [];
+        let food = {};
+        let dx = BLOCK_SIZE; // Velocity x (initial movement right)
+        let dy = 0;          // Velocity y
+        let score = 0;
+        let gameLoopInterval = null;
+        let isPaused = true;
+        let changingDirection = false; // Prevents the snake from immediately reversing direction
+
+        /**
+         * Sets up the initial state of the game.
+         */
+        function initializeGame() {
+            // Reset game state
+            snake = [
+                // Initial snake body (4 segments, moving right)
+                { x: 3 * BLOCK_SIZE, y: 0 },
+                { x: 2 * BLOCK_SIZE, y: 0 },
+                { x: 1 * BLOCK_SIZE, y: 0 },
+                { x: 0, y: 0 }
+            ];
+            dx = BLOCK_SIZE;
+            dy = 0;
+            score = 0;
+            isPaused = true;
+            changingDirection = false;
+            scoreDisplay.textContent = score;
+            messageBox.textContent = "Press Start Game to begin!";
+            startButton.textContent = "Start Game";
+            generateFood();
+            drawGame(); // Draw the initial state
+        }
+
+        /**
+         * Generates a random position for the food (apple), ensuring it does not overlap the snake.
+         */
+        function generateFood() {
+            let newFood;
+            let isOverlapping;
+
+            do {
+                // Generate random grid coordinates
+                const foodX = Math.floor(Math.random() * GRID_SIZE) * BLOCK_SIZE;
+                const foodY = Math.floor(Math.random() * GRID_SIZE) * BLOCK_SIZE;
+                newFood = { x: foodX, y: foodY };
+
+                // Check for overlap with the snake's current position
+                isOverlapping = snake.some(part => part.x === newFood.x && part.y === newFood.y);
+
+            } while (isOverlapping);
+
+            food = newFood;
+        }
+
+        /**
+         * Draws the snake and the food on the canvas.
+         */
+        function drawGame() {
+            // Clear canvas for the next frame (background color)
+            ctx.fillStyle = '#222';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Food (Apple - Neon Pink)
+            ctx.fillStyle = '#ff0077';
+            ctx.strokeStyle = '#990044';
+            ctx.fillRect(food.x, food.y, BLOCK_SIZE, BLOCK_SIZE);
+            ctx.strokeRect(food.x, food.y, BLOCK_SIZE, BLOCK_SIZE);
+
+            // Draw Snake segments
+            snake.forEach((part, index) => {
+                // Head is brighter
+                if (index === 0) {
+                    ctx.fillStyle = '#ccff00'; // Neon Green
+                    ctx.strokeStyle = '#99cc00';
+                } else {
+                    ctx.fillStyle = '#66cc00'; // Darker Green for body
+                    ctx.strokeStyle = '#339900';
+                }
+
+                ctx.fillRect(part.x, part.y, BLOCK_SIZE, BLOCK_SIZE);
+                ctx.strokeRect(part.x, part.y, BLOCK_SIZE, BLOCK_SIZE);
+            });
+        }
+
+        /**
+         * Updates the snake's position for the current frame.
+         */
+        function moveSnake() {
+            // Calculate the position of the new head
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Add the new head to the front of the snake array
+            snake.unshift(head);
+
+            // Check if the snake ate the food
+            if (head.x === food.x && head.y === food.y) {
+                // Snake grows (do not remove tail), increase score, and generate new food
+                score += 10;
+                scoreDisplay.textContent = score;
+                generateFood();
+            } else {
+                // Snake moves (remove the tail segment if no food was eaten)
+                snake.pop();
+            }
+
+            // Allow direction change again for the next frame
+            changingDirection = false;
+        }
+
+        /**
+         * Checks if the snake has hit a wall or itself.
+         * @returns {boolean} True if collision occurred, false otherwise.
+         */
+        function checkCollision() {
+            const head = snake[0];
+            const canvasMax = canvas.width;
+
+            // 1. Wall collision (checking if head coordinates are outside the canvas bounds)
+            const hitLeftWall = head.x < 0;
+            const hitRightWall = head.x >= canvasMax;
+            const hitTopWall = head.y < 0;
+            const hitBottomWall = head.y >= canvasMax;
+
+            if (hitLeftWall || hitRightWall || hitTopWall || hitBottomWall) {
+                return true;
+            }
+
+            // 2. Self collision (start checking from the 4th segment to avoid false positives)
+            for (let i = 4; i < snake.length; i++) {
+                if (snake[i].x === head.x && snake[i].y === head.y) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /**
+         * The main game loop function.
+         */
+        function mainLoop() {
+            if (isPaused) return;
+
+            if (checkCollision()) {
+                endGame();
+                return;
+            }
+
+            moveSnake();
+            drawGame();
+        }
+
+        /**
+         * Handles the game end state.
+         */
+        function endGame() {
+            clearInterval(gameLoopInterval);
+            isPaused = true;
+            messageBox.textContent = `GAME OVER! Final Score: ${score}`;
+            startButton.textContent = "Play Again";
+        }
+
+        /**
+         * Starts, pauses, or restarts the game loop.
+         */
+        function startGame() {
+            if (isPaused) {
+                // If it's a new game or restart, re-initialize state
+                if (startButton.textContent !== "Resume") {
+                    initializeGame();
+                }
+
+                isPaused = false;
+                messageBox.textContent = "Use Arrow Keys to steer!";
+                startButton.textContent = "Pause";
+
+                // Start the game loop
+                gameLoopInterval = setInterval(mainLoop, GAME_SPEED_MS);
+            } else {
+                // Pause the game
+                clearInterval(gameLoopInterval);
+                isPaused = true;
+                messageBox.textContent = "Game Paused. Press Resume to continue.";
+                startButton.textContent = "Resume";
+            }
+        }
+
+        /**
+         * Changes the direction of the snake based on keyboard input, preventing immediate reversal.
+         */
+        function changeDirection(event) {
+            const LEFT_KEY = 37;
+            const RIGHT_KEY = 39;
+            const UP_KEY = 38;
+            const DOWN_KEY = 40;
+
+            // Prevent direction change if paused or already changed this frame
+            if (changingDirection || isPaused) return;
+            changingDirection = true;
+
+            const keyPressed = event.keyCode;
+            const goingUp = dy === -BLOCK_SIZE;
+            const goingDown = dy === BLOCK_SIZE;
+            const goingRight = dx === BLOCK_SIZE;
+            const goingLeft = dx === -BLOCK_SIZE;
+
+            if (keyPressed === LEFT_KEY && !goingRight) {
+                dx = -BLOCK_SIZE;
+                dy = 0;
+            } else if (keyPressed === UP_KEY && !goingDown) {
+                dx = 0;
+                dy = -BLOCK_SIZE;
+            } else if (keyPressed === RIGHT_KEY && !goingLeft) {
+                dx = BLOCK_SIZE;
+                dy = 0;
+            } else if (keyPressed === DOWN_KEY && !goingUp) {
+                dx = 0;
+                dy = BLOCK_SIZE;
+            }
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('keydown', changeDirection);
+        startButton.addEventListener('click', startGame);
+
+        // Initialize the game when the page loads
+        initializeGame();
+    });
+</script>
+
+</body>
+</html>

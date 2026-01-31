@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fireboy & Watergirl - 1000 Levels & Hazards</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; background: #0f172a; overflow: hidden; color: white; font-family: sans-serif; }
+        canvas { 
+            background: #1e293b; 
+            display: block; 
+            margin: 0 auto; 
+            border: 4px solid #334155; 
+            border-top: none;
+            max-width: 100%;
+            max-height: 90vh;
+        }
+        #videoOverlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: black; display: none; z-index: 1000;
+        }
+        .no-cursor { cursor: none; }
+        .level-btn { transition: all 0.2s; }
+        .level-btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+
+        #floating-hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+        }
+
+        #menu-circle {
+            width: 60px;
+            height: 60px;
+            background: rgba(30, 41, 59, 0.9);
+            border: 3px solid #eab308;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+
+        #menu-circle:hover { transform: scale(1.1); }
+        #menu-circle .lvl-text { font-size: 10px; color: #94a3b8; font-weight: bold; margin-bottom: -2px; }
+        #menu-circle .num-text { font-size: 20px; font-weight: 900; color: #eab308; }
+
+        #expanded-menu {
+            position: absolute;
+            top: 70px;
+            left: 0;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            width: 240px;
+            display: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Main Menu -->
+    <div id="setup" class="fixed inset-0 flex flex-col items-center justify-center bg-slate-900 z-50 p-4">
+        <h1 class="text-5xl font-bold mb-2 text-orange-500">Fireboy <span class="text-blue-500">&</span> Watergirl</h1>
+        <p class="text-slate-400 mb-8 italic">The 1000 Level Hazard Challenge</p>
+        
+        <div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-2xl text-center">
+            <div class="flex gap-4 mb-6">
+                <button onclick="startGame()" class="flex-1 bg-orange-600 hover:bg-orange-700 text-white text-xl px-6 py-4 rounded-lg font-bold transition-all shadow-lg">
+                    START GAME
+                </button>
+                <button onclick="toggleMenu('level-menu', true)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-xl px-6 py-4 rounded-lg font-bold transition-all shadow-lg">
+                    LEVEL SELECT
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 text-left text-sm mb-4">
+                <div class="p-3 bg-slate-900 rounded border border-orange-500/50">
+                    <p class="font-bold text-orange-400">FIREBOY</p>
+                    <p>Move: ARROW KEYS</p>
+                </div>
+                <div class="p-3 bg-slate-900 rounded border border-blue-500/50">
+                    <p class="font-bold text-blue-400">WATERGIRL</p>
+                    <p>Move: WASD KEYS</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Level Selection Menu -->
+    <div id="level-menu" class="fixed inset-0 bg-slate-900 z-[60] p-8 hidden flex flex-col items-center">
+        <h2 class="text-3xl font-bold mb-6">Select Level</h2>
+        <div id="level-grid" class="grid grid-cols-5 md:grid-cols-10 gap-2 overflow-y-auto max-h-[70vh] p-4 bg-slate-800 rounded-lg w-full max-w-4xl">
+        </div>
+        <button onclick="toggleMenu('level-menu', false)" class="mt-8 bg-slate-700 px-8 py-2 rounded-full hover:bg-slate-600">Back</button>
+    </div>
+
+    <!-- Floating HUD Overlay -->
+    <div id="floating-hud" style="display:none;">
+        <div id="menu-circle" onclick="toggleExpandedMenu()">
+            <span class="lvl-text">LEVEL</span>
+            <span class="num-text" id="hud-level-num">1</span>
+        </div>
+        <div id="expanded-menu">
+            <div class="mb-4 pb-2 border-b border-slate-700">
+                <p class="text-xs text-slate-400 uppercase font-bold mb-2">Controls</p>
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-orange-500 font-bold">Fireboy:</span>
+                    <span class="text-slate-300">Arrows</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-blue-400 font-bold">Watergirl:</span>
+                    <span class="text-slate-300">WASD</span>
+                </div>
+            </div>
+            <div class="flex flex-col gap-2">
+                <button onclick="resetLevel()" class="w-full bg-slate-700 hover:bg-slate-600 py-2 rounded text-sm font-bold flex items-center justify-center gap-2">
+                    🔄 RESET LEVEL (R)
+                </button>
+                <button onclick="exitToMenu()" class="w-full bg-red-900/40 hover:bg-red-800/60 border border-red-500/30 py-2 rounded text-sm font-bold text-red-200">
+                    🚪 EXIT TO MENU
+                </button>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-4 text-center">Click circle again to hide</p>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+    <div id="videoOverlay">
+        <video id="cutscene" class="w-full h-full object-cover">
+            <source src="uploaded:videoplayback (3).mp4" type="video/mp4">
+        </video>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('cutscene');
+        const overlay = document.getElementById('videoOverlay');
+        const levelGrid = document.getElementById('level-grid');
+        const floatingHud = document.getElementById('floating-hud');
+        const hudLevelNum = document.getElementById('hud-level-num');
+        const expandedMenu = document.getElementById('expanded-menu');
+
+        let currentLevel = 1;
+        let unlockedLevels = parseInt(localStorage.getItem('fw_unlocked')) || 1;
+        let isGameRunning = false;
+        let videoTriggered = false;
+
+        let cameraY = 0;
+        let targetCameraY = 0;
+
+        const players = {
+            fire: { x: 50, y: 400, w: 20, h: 30, vx: 0, vy: 0, color: '#f97316', eyeColor: '#000', label: 'FB', grounded: false },
+            water: { x: 80, y: 400, w: 20, h: 30, vx: 0, vy: 0, color: '#0ea5e9', eyeColor: '#000', label: 'WG', grounded: false }
+        };
+
+        let platforms = [];
+        let hazards = []; 
+        let enemies = [];
+        let goal = { x: 720, y: 10, w: 60, h: 80 };
+        const keys = {};
+
+        function toggleMenu(id, show) {
+            const el = document.getElementById(id);
+            if (show) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+            if (id === 'level-menu' && show) renderLevelGrid();
+        }
+
+        function toggleExpandedMenu() {
+            expandedMenu.style.display = expandedMenu.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function renderLevelGrid() {
+            levelGrid.innerHTML = '';
+            for (let i = 1; i <= 1000; i++) {
+                const btn = document.createElement('button');
+                btn.innerText = i;
+                btn.className = `level-btn p-2 rounded text-sm font-bold ${i <= unlockedLevels ? 'bg-orange-600 hover:bg-orange-500' : 'bg-slate-700'}`;
+                btn.disabled = i > unlockedLevels;
+                btn.onclick = () => {
+                    currentLevel = i;
+                    toggleMenu('level-menu', false);
+                    startGame();
+                };
+                levelGrid.appendChild(btn);
+            }
+        }
+
+        function generateLevel(levelNum) {
+            players.fire.x = 50; players.fire.y = 420; players.fire.vy = 0;
+            players.water.x = 80; players.water.y = 420; players.water.vy = 0;
+            
+            hudLevelNum.innerText = levelNum;
+            expandedMenu.style.display = 'none'; 
+
+            cameraY = 0;
+            targetCameraY = 0;
+
+            platforms = [{ x: 0, y: 460, w: 800, h: 40, active: true }];
+            hazards = [];
+            enemies = [];
+
+            let seed = levelNum;
+            function random() {
+                seed = (seed * 16807) % 2147483647;
+                return (seed - 1) / 2147483646;
+            }
+
+            const platformCount = 10 + Math.min(Math.floor(levelNum / 10), 20);
+            let currentY = 360;
+
+            for (let i = 0; i < platformCount; i++) {
+                const w = 350 + random() * 300; // Even bigger platforms
+                const x = random() * (canvas.width - w);
+                const plat = { x, y: currentY, w, h: 24, active: true };
+                platforms.push(plat);
+
+                const isExitPlatform = (i === platformCount - 1);
+                
+                // Hazard spawning logic updated per request
+                if (!isExitPlatform && random() > 0.35) { // Spawn more often (35% chance now)
+                    let hw = 80 + random() * 100;
+                    let hx = (plat.x + 40) + (random() * (plat.w - hw - 80));
+                    const typeRoll = random();
+                    
+                    let type;
+                    if (typeRoll < 0.15) {
+                        type = 'slime'; // Rare slime
+                    } else if (typeRoll < 0.6) {
+                        type = 'lava'; // More common lava
+                    } else {
+                        type = 'water';
+                    }
+                    
+                    hazards.push({ x: hx, y: plat.y - 6, w: hw, h: 12, type, parentPlat: plat });
+                }
+
+                if (i % 3 === 0 && !isExitPlatform) {
+                   enemies.push({ 
+                        x: plat.x + plat.w/2, y: plat.y - 30, w: 25, h: 25, 
+                        vx: 1.5 + (levelNum/200), dir: 1, parentPlat: plat 
+                    });
+                }
+
+                currentY -= 120; 
+            }
+
+            const topPlat = platforms[platforms.length - 1];
+            goal.x = topPlat.x + (topPlat.w / 2) - 30;
+            goal.y = topPlat.y - 85;
+        }
+
+        function startGame() {
+            document.getElementById('setup').style.display = 'none';
+            floatingHud.style.display = 'block';
+            isGameRunning = true;
+            generateLevel(currentLevel);
+            gameLoop();
+        }
+
+        function exitToMenu() {
+            isGameRunning = false;
+            floatingHud.style.display = 'none';
+            document.getElementById('setup').style.display = 'flex';
+        }
+
+        function resetLevel() {
+            generateLevel(currentLevel);
+        }
+
+        function nextLevel() {
+            if (currentLevel < 1000) {
+                currentLevel++;
+                if (currentLevel > unlockedLevels) {
+                    unlockedLevels = currentLevel;
+                    localStorage.setItem('fw_unlocked', unlockedLevels);
+                }
+                generateLevel(currentLevel);
+            }
+        }
+
+        function updatePhysics() {
+            if (!isGameRunning || videoTriggered) return;
+            const gravity = 0.6;
+            const speed = 4.5;
+            const jump = -13;
+
+            if (keys['ArrowLeft']) players.fire.vx = -speed;
+            else if (keys['ArrowRight']) players.fire.vx = speed;
+            else players.fire.vx = 0;
+            if (keys['ArrowUp'] && players.fire.grounded) { players.fire.vy = jump; players.fire.grounded = false; }
+
+            if (keys['KeyA']) players.water.vx = -speed;
+            else if (keys['KeyD']) players.water.vx = speed;
+            else players.water.vx = 0;
+            if (keys['KeyW'] && players.water.grounded) { players.water.vy = jump; players.water.grounded = false; }
+
+            const lowestPlayerY = Math.max(players.fire.y, players.water.y);
+            const highestPlayerY = Math.min(players.fire.y, players.water.y);
+
+            platforms.forEach(p => {
+                if (p.active && p.y > lowestPlayerY + 500) p.active = false;
+            });
+
+            [players.fire, players.water].forEach(p => {
+                p.vy += gravity;
+                p.x += p.vx;
+                p.y += p.vy;
+                p.grounded = false;
+
+                platforms.forEach(plat => {
+                    if (!plat.active) return;
+                    if (p.x < plat.x + plat.w && p.x + p.w > plat.x && p.y + p.h > plat.y && p.y + p.h < plat.y + plat.h + 15 && p.vy >= 0) {
+                        p.y = plat.y - p.h; p.vy = 0; p.grounded = true;
+                    }
+                });
+
+                hazards.forEach(h => {
+                    if (!h.parentPlat.active) return;
+                    if (p.x < h.x + h.w && p.x + p.w > h.x && p.y + p.h > h.y && p.y < h.y + h.h) {
+                        // RE-WRITTEN HAZARD COLLISIONS: Fireboy safe in Lava, Watergirl safe in Water.
+                        if (h.type === 'slime') resetLevel(); // Slime kills both
+                        if (h.type === 'lava' && p === players.water) resetLevel(); // Watergirl dies in lava
+                        if (h.type === 'water' && p === players.fire) resetLevel(); // Fireboy dies in water
+                    }
+                });
+
+                if (p.x < 0) p.x = 0;
+                if (p.x > canvas.width - p.w) p.x = canvas.width - p.w;
+                if (p.y > lowestPlayerY + 650) resetLevel();
+            });
+
+            enemies.forEach(en => {
+                if (!en.parentPlat.active) return;
+                en.x += en.vx * en.dir;
+                if (en.x <= en.parentPlat.x || en.x + en.w >= en.parentPlat.x + en.parentPlat.w) en.dir *= -1;
+                [players.fire, players.water].forEach(p => {
+                    if (p.x < en.x + en.w && p.x + p.w > en.x && p.y < en.y + en.h && p.y + p.h > en.y) resetLevel();
+                });
+            });
+
+            targetCameraY = 300 - highestPlayerY; 
+            cameraY += (targetCameraY - cameraY) * 0.1;
+
+            if (players.fire.x + players.fire.w > goal.x && players.fire.x < goal.x + goal.w && players.fire.y < goal.y + goal.h &&
+                players.water.x + players.water.w > goal.x && players.water.x < goal.x + goal.w && players.water.y < goal.y + goal.h) {
+                nextLevel();
+            }
+        }
+
+        function drawPixelEyes(x, y, w, h, lookDir) {
+            ctx.fillStyle = 'black';
+            const eyeSize = 4;
+            const eyeSpacing = 4;
+            const centerX = x + w / 2;
+            const centerY = y + h / 4;
+            
+            // Adjust offset based on look direction
+            const offset = lookDir > 0 ? 2 : (lookDir < 0 ? -2 : 0);
+            
+            // Left eye
+            ctx.fillRect(centerX - eyeSpacing + offset, centerY, eyeSize, eyeSize);
+            // Right eye
+            ctx.fillRect(centerX + offset, centerY, eyeSize, eyeSize);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(0, cameraY);
+
+            platforms.forEach(p => {
+                if (!p.active) return;
+                ctx.fillStyle = '#334155'; ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.strokeStyle = '#475569'; ctx.strokeRect(p.x, p.y, p.w, p.h);
+            });
+
+            hazards.forEach(h => {
+                if (!h.parentPlat.active) return;
+                ctx.fillStyle = h.type === 'lava' ? '#ef4444' : (h.type === 'water' ? '#3b82f6' : '#22c55e');
+                ctx.fillRect(h.x, h.y, h.w, h.h);
+            });
+            
+            const topPlat = platforms[platforms.length - 1];
+            if (topPlat.active) {
+                ctx.fillStyle = '#f59e0b'; ctx.globalAlpha = 0.2;
+                ctx.fillRect(goal.x, goal.y, goal.w, goal.h); ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = '#fbbf24'; ctx.strokeRect(goal.x, goal.y, goal.w, goal.h);
+            }
+            
+            enemies.forEach(en => {
+                if (!en.parentPlat.active) return;
+                ctx.fillStyle = '#166534'; // Darker slime green for enemy
+                ctx.fillRect(en.x, en.y, en.w, en.h);
+                drawPixelEyes(en.x, en.y, en.w, en.h, en.dir);
+            });
+            
+            // Draw Fireboy
+            ctx.fillStyle = players.fire.color;
+            ctx.fillRect(players.fire.x, players.fire.y, players.fire.w, players.fire.h);
+            drawPixelEyes(players.fire.x, players.fire.y, players.fire.w, players.fire.h, players.fire.vx);
+
+            // Draw Watergirl
+            ctx.fillStyle = players.water.color;
+            ctx.fillRect(players.water.x, players.water.y, players.water.w, players.water.h);
+            drawPixelEyes(players.water.x, players.water.y, players.water.w, players.water.h, players.water.vx);
+            
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            if (isGameRunning) { updatePhysics(); draw(); requestAnimationFrame(gameLoop); }
+        }
+
+        window.addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'KeyR') resetLevel(); });
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+    </script>
+</body>
+</html>

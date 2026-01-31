@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Time</title>
+    <!-- Load Tailwind CSS for responsive utilities and basic styling -->
+         <button onclick="window.location.href='index.html'">
+back
+    </button>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Tone.js for game sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        /* Apply the Inter font globally */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Custom styles for the Tetris board */
+        #tetris-canvas {
+            border: 8px solid #38a169; /* Green border for retro look */
+            box-shadow: 0 0 20px rgba(56, 161, 105, 0.8), inset 0 0 10px rgba(0, 0, 0, 0.5);
+            background-color: #0d1217;
+            display: block;
+            margin: auto;
+            image-rendering: pixelated; /* Sharp, retro blocks */
+        }
+
+        /* Styling for the next piece preview board */
+        #next-piece-canvas {
+            background-color: #0d1217;
+            border: 4px solid #4a5568;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            margin-top: 10px;
+        }
+
+        /* Styling for the game controls/info panel */
+        .info-panel {
+            background-color: #2d3748;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+            color: #e2e8f0;
+            margin-left: 20px;
+            min-width: 180px;
+        }
+
+        /* Button styling for controls */
+        .control-button {
+            padding: 10px;
+            margin: 5px;
+            font-weight: bold;
+            border-radius: 8px;
+            transition: all 0.1s ease-in-out;
+            background-color: #48bb78;
+            color: #1a202c;
+            box-shadow: 0 3px 0 #38a169;
+        }
+
+        .control-button:active {
+            box-shadow: 0 1px 0 #38a169;
+            transform: translateY(2px);
+        }
+
+        .game-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            padding: 30px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            border: 5px solid #e53e3e;
+            border-radius: 15px;
+            text-align: center;
+            display: none; /* Hidden by default */
+        }
+
+        /* Responsive adjustments for mobile */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                flex-direction: column;
+                min-height: auto;
+            }
+            .info-panel {
+                margin-left: 0;
+                margin-top: 20px;
+                order: 3; /* Move below the board */
+            }
+            .game-container {
+                order: 2;
+            }
+            .mobile-controls {
+                display: flex !important; /* Show mobile controls */
+                justify-content: center;
+                margin-top: 10px;
+            }
+            .mobile-controls .control-button {
+                flex-grow: 1;
+                margin: 0 5px;
+            }
+            /* Hide non-essential info on small screens */
+            .hide-on-mobile {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="selection:bg-green-400 selection:text-black">
+
+    <div class="flex flex-col md:flex-row items-start justify-center p-4">
+        
+        <!-- Game Board Container -->
+        <div class="game-container relative rounded-xl">
+            <canvas id="tetris-canvas"></canvas>
+            
+            <!-- Game Over/Paused Overlay -->
+            <div id="game-status" class="game-status">
+                <h2 id="status-message" class="text-3xl font-extrabold mb-4">PAUSED</h2>
+                <button id="start-button" class="control-button text-xl px-6 py-3 bg-red-500 hover:bg-red-600 active:bg-red-700 shadow-lg shadow-red-800/50">
+                    Press START / RESUME
+                </button>
+                <p class="mt-4 text-sm">Use Arrow Keys or A/D to move, S to soft drop, W/Up to rotate, P for Pause.</p>
+            </div>
+        </div>
+
+        <!-- Info & Controls Panel -->
+        <div class="info-panel flex flex-col justify-between">
+            <div>
+                <h1 class="text-3xl font-bold mb-4 text-center text-green-400">TETRIS</h1>
+                <div class="text-lg mb-3">
+                    Score: <span id="score" class="font-mono font-bold text-yellow-300">0</span>
+                </div>
+                <div class="text-lg mb-6">
+                    Level: <span id="level" class="font-mono font-bold text-red-400">1</span>
+                </div>
+
+                <h2 class="text-xl font-semibold mb-2 text-center text-green-400">NEXT</h2>
+                <canvas id="next-piece-canvas"></canvas>
+
+                <div class="hide-on-mobile mt-8">
+                    <h3 class="text-lg font-semibold mb-2 text-green-400">Controls:</h3>
+                    <ul class="text-sm space-y-1">
+                        <li><span class="font-mono text-gray-400">← / A</span> : Move Left</li>
+                        <li><span class="font-mono text-gray-400">→ / D</span> : Move Right</li>
+                        <li><span class="font-mono text-gray-400">↓ / S</span> : Soft Drop</li>
+                        <li><span class="font-mono text-gray-400">↑ / W</span> : Rotate</li>
+                        <li><span class="font-mono text-gray-400">P</span> : Pause / Resume</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Mobile Controls -->
+            <div class="mobile-controls mt-4 hidden">
+                <button class="control-button" onclick="game.move(-1)">←</button>
+                <button class="control-button" onclick="game.rotate()">↻</button>
+                <button class="control-button" onclick="game.move(1)">→</button>
+                <button class="control-button" onclick="game.softDrop()">↓</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set up the necessary Firebase variables for potential future use (although not needed for a single-player game)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        /**
+         * Tetris Game Logic
+         */
+        
+        // --- Game Setup Constants ---
+        const COLS = 10;
+        const ROWS = 20;
+        const BLOCK_SIZE = 30; // 30px per block
+        const WIDTH = COLS * BLOCK_SIZE;
+        const HEIGHT = ROWS * BLOCK_SIZE;
+        
+        const canvas = document.getElementById('tetris-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+        
+        const nextCanvas = document.getElementById('next-piece-canvas');
+        const nextCtx = nextCanvas.getContext('2d');
+        const NEXT_PREVIEW_SIZE = BLOCK_SIZE * 5; // 5x5 grid for preview
+        nextCanvas.width = NEXT_PREVIEW_SIZE;
+        nextCanvas.height = NEXT_PREVIEW_SIZE;
+
+        const scoreEl = document.getElementById('score');
+        const levelEl = document.getElementById('level');
+        const statusEl = document.getElementById('game-status');
+        const statusMessageEl = document.getElementById('status-message');
+        const startButton = document.getElementById('start-button');
+        
+        // --- Tetromino Shapes and Colors ---
+        const TETROMINOS = [
+            // I (Cyan)
+            [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
+            // J (Blue)
+            [[1, 0, 0], [1, 1, 1], [0, 0, 0]],
+            // L (Orange)
+            [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
+            // O (Yellow)
+            [[1, 1], [1, 1]],
+            // S (Green)
+            [[0, 1, 1], [1, 1, 0], [0, 0, 0]],
+            // T (Purple)
+            [[0, 1, 0], [1, 1, 1], [0, 0, 0]],
+            // Z (Red)
+            [[1, 1, 0], [0, 1, 1], [0, 0, 0]]
+        ];
+
+        const COLORS = [
+            null, // Index 0 is reserved for empty cells
+            '#00FFFF', // I - Cyan
+            '#0000FF', // J - Blue
+            '#FFA500', // L - Orange
+            '#FFFF00', // O - Yellow
+            '#00FF00', // S - Green
+            '#800080', // T - Purple
+            '#FF0000'  // Z - Red
+        ];
+        
+        // --- Sound Effects Setup (Tone.js) ---
+        let synth;
+        let lineClearSynth;
+        
+        try {
+            // Initialize Tone.js components
+            synth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "square" },
+                envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.1 }
+            }).toDestination();
+            
+            lineClearSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sine" },
+                envelope: { attack: 0.01, decay: 0.05, sustain: 0, release: 0.2 }
+            }).toDestination();
+            
+        } catch (e) {
+            console.error("Tone.js failed to initialize:", e);
+            // Provide dummy functions if Tone.js fails (e.g., in a restrictive environment)
+            synth = { triggerAttackRelease: () => {} };
+            lineClearSynth = { triggerAttackRelease: () => {} };
+        }
+        
+        // Sound utility functions
+        function playLockSound() {
+            synth.triggerAttackRelease("C4", "8n");
+        }
+        
+        function playClearSound(lines) {
+            const notes = ["E5", "G5", "C6", "E6"];
+            lineClearSynth.triggerAttackRelease(notes[lines - 1] || "C6", "4n");
+        }
+        
+        function playGameOverSound() {
+            synth.triggerAttackRelease(["C3", "G2"], "2n");
+        }
+        
+        // --- Game State Variables ---
+        let lastTime = 0;
+        let dropCounter = 0;
+        let dropInterval = 1000; // Time in ms before piece drops automatically
+        let isPaused = true;
+        
+        // The main game object
+        const game = {
+            board: [],
+            score: 0,
+            level: 1,
+            piece: { matrix: [], pos: { x: 0, y: 0 }, colorIndex: 0 },
+            nextPiece: { matrix: [], colorIndex: 0 }
+        };
+
+        // --- Core Game Functions ---
+
+        /**
+         * Creates an empty game board grid.
+         * @param {number} width - Number of columns.
+         * @param {number} height - Number of rows.
+         * @returns {number[][]} The grid.
+         */
+        function createMatrix(width, height) {
+            const matrix = [];
+            while (height--) {
+                matrix.push(new Array(width).fill(0));
+            }
+            return matrix;
+        }
+
+        /**
+         * Generates a new random tetromino piece.
+         * @returns {object} The new piece object.
+         */
+        function createPiece() {
+            const randomIndex = Math.floor(Math.random() * TETROMINOS.length);
+            const matrix = TETROMINOS[randomIndex];
+            // The color index is the randomIndex + 1 (since 0 is empty)
+            const colorIndex = randomIndex + 1;
+            
+            return {
+                matrix: matrix,
+                colorIndex: colorIndex,
+                pos: { 
+                    x: Math.floor(COLS / 2) - Math.floor(matrix[0].length / 2),
+                    y: 0
+                }
+            };
+        }
+
+        /**
+         * Draws a matrix (piece or board) onto the context.
+         * @param {CanvasRenderingContext2D} context - The canvas context.
+         * @param {number[][]} matrix - The shape matrix.
+         * @param {object} offset - {x, y} position offset.
+         * @param {number} blockSize - Size of each block.
+         */
+        function drawMatrix(context, matrix, offset, blockSize) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        const color = COLORS[value];
+                        context.fillStyle = color;
+                        
+                        const drawX = (x + offset.x) * blockSize;
+                        const drawY = (y + offset.y) * blockSize;
+
+                        // Draw the main square
+                        context.fillRect(drawX, drawY, blockSize, blockSize);
+                        
+                        // Add highlights/shadows for 3D effect
+                        context.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                        context.lineWidth = 2;
+                        context.strokeRect(drawX, drawY, blockSize, blockSize);
+                        
+                        context.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                        context.fillRect(drawX + 2, drawY + 2, blockSize - 4, blockSize - 4);
+                    }
+                });
+            });
+        }
+        
+        /**
+         * Draws the entire game state.
+         */
+        function draw() {
+            // Clear the main canvas
+            ctx.fillStyle = '#0d1217'; // Dark background
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            
+            // Draw the main board
+            drawMatrix(ctx, game.board, { x: 0, y: 0 }, BLOCK_SIZE);
+            
+            // Draw the current falling piece
+            drawMatrix(ctx, game.piece.matrix, game.piece.pos, BLOCK_SIZE);
+            
+            // Draw the next piece preview
+            nextCtx.fillStyle = '#0d1217';
+            nextCtx.fillRect(0, 0, NEXT_PREVIEW_SIZE, NEXT_PREVIEW_SIZE);
+            
+            // Center the next piece in the preview box (4x4 max matrix centered in a 5x5 box)
+            const matrixSize = game.nextPiece.matrix.length;
+            const xOffset = (5 - matrixSize) / 2;
+            const yOffset = (5 - matrixSize) / 2;
+            drawMatrix(nextCtx, game.nextPiece.matrix, { x: xOffset, y: yOffset }, BLOCK_SIZE);
+        }
+
+        /**
+         * Merges the current piece matrix into the main board matrix.
+         */
+        function merge() {
+            game.piece.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        game.board[y + game.piece.pos.y][x + game.piece.pos.x] = game.piece.colorIndex;
+                    }
+                });
+            });
+            playLockSound();
+        }
+
+        /**
+         * Checks for collision between the current piece and the board boundaries/locked pieces.
+         * @returns {boolean} True if collision occurs.
+         */
+        function collide() {
+            const [m, o] = [game.piece.matrix, game.piece.pos];
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 && (
+                            // Check boundary collision (bottom or sides)
+                            (game.board[y + o.y] && game.board[y + o.y][x + o.x]) !== 0 ||
+                            !game.board[y + o.y]
+                        )
+                    ) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Clears completed lines and updates the score.
+         */
+        function clearLines() {
+            let clearedCount = 0;
+            outer: for (let y = game.board.length - 1; y > 0; --y) {
+                for (let x = 0; x < game.board[y].length; ++x) {
+                    if (game.board[y][x] === 0) {
+                        continue outer; // Not a full line
+                    }
+                }
+
+                // If we reach here, the line 'y' is full.
+                const row = game.board.splice(y, 1)[0].fill(0);
+                game.board.unshift(row); // Add a new empty row at the top
+                y++; // Re-check the same row index (which now holds the row above it)
+                clearedCount++;
+            }
+            
+            if (clearedCount > 0) {
+                playClearSound(clearedCount);
+                // Scoring system (e.g., Nintendo standard)
+                const points = [0, 40, 100, 300, 1200];
+                game.score += points[clearedCount] * game.level;
+                
+                // Update level (e.g., every 10 lines)
+                const newLevel = 1 + Math.floor(game.score / 2000); // Simple leveling
+                if (newLevel > game.level) {
+                    game.level = newLevel;
+                    dropInterval = Math.max(100, 1000 - (game.level - 1) * 70); // Increase speed
+                    levelEl.textContent = game.level;
+                }
+                scoreEl.textContent = game.score;
+            }
+        }
+
+        /**
+         * Rotates a matrix 90 degrees clockwise.
+         * @param {number[][]} matrix - The matrix to rotate.
+         * @param {number} dir - 1 for clockwise, -1 for counter-clockwise.
+         * @returns {number[][]} The rotated matrix.
+         */
+        function rotateMatrix(matrix, dir) {
+            // Transpose the matrix
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) {
+                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+                }
+            }
+
+            // Reverse the rows (for clockwise rotation) or columns (for counter-clockwise)
+            if (dir > 0) {
+                matrix.forEach(row => row.reverse());
+            } else {
+                // If needed for counter-clockwise, reverse columns (not commonly used in standard Tetris)
+                // Matrix is already transposed, reversing rows handles 90deg rotation in either direction after transpose
+                // For 90deg clockwise: Transpose + reverse rows.
+                // For 90deg counter-clockwise: Transpose + reverse columns (or reverse rows of the already reversed/transposed matrix)
+            }
+            return matrix;
+        }
+        
+        /**
+         * Attempts to rotate the current piece, handling wall kicks.
+         */
+        game.rotate = function() {
+            if (isPaused) return;
+
+            const pos = game.piece.pos.x;
+            let offset = 1;
+            
+            // Save current state for rollback
+            const oldMatrix = game.piece.matrix;
+            game.piece.matrix = rotateMatrix(game.piece.matrix, 1);
+
+            // Wall Kick implementation
+            while (collide()) {
+                game.piece.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1)); // 1, -2, 3, -4, ...
+                if (offset > game.piece.matrix.length) {
+                    // Revert rotation if wall kick failed
+                    game.piece.matrix = oldMatrix; 
+                    game.piece.pos.x = pos;
+                    return;
+                }
+            }
+        };
+
+        /**
+         * Moves the current piece horizontally.
+         * @param {number} dir - -1 for left, 1 for right.
+         */
+        game.move = function(dir) {
+            if (isPaused) return;
+
+            game.piece.pos.x += dir;
+            if (collide()) {
+                game.piece.pos.x -= dir; // Rollback
+            }
+        };
+
+        /**
+         * Drops the piece by one row.
+         */
+        game.drop = function() {
+            game.piece.pos.y++;
+            if (collide()) {
+                game.piece.pos.y--; // Rollback
+                merge();
+                clearLines();
+                resetPiece();
+            }
+            dropCounter = 0;
+        };
+        
+        /**
+         * Drops the piece faster (soft drop).
+         */
+        game.softDrop = function() {
+            if (isPaused) return;
+            game.drop();
+        };
+
+        /**
+         * Resets the current piece, replacing it with the next one and checking for game over.
+         */
+        function resetPiece() {
+            game.piece = game.nextPiece;
+            game.nextPiece = createPiece();
+            
+            // Game Over Check
+            if (collide()) {
+                isPaused = true;
+                playGameOverSound();
+                statusMessageEl.textContent = `GAME OVER! Score: ${game.score}`;
+                startButton.textContent = 'Play Again';
+                statusEl.style.display = 'block';
+            }
+        }
+        
+        /**
+         * Main game loop for animation and physics.
+         * @param {number} time - Current time provided by requestAnimationFrame.
+         */
+        function loop(time = 0) {
+            if (!isPaused) {
+                const deltaTime = time - lastTime;
+                lastTime = time;
+
+                dropCounter += deltaTime;
+                if (dropCounter > dropInterval) {
+                    game.drop();
+                }
+
+                draw();
+                requestAnimationFrame(loop);
+            }
+        }
+        
+        /**
+         * Starts or resumes the game.
+         */
+        function startGame() {
+            if (isPaused) {
+                // If it was game over, reset the state
+                if (statusMessageEl.textContent.startsWith('GAME OVER')) {
+                    game.score = 0;
+                    game.level = 1;
+                    dropInterval = 1000;
+                    game.board.forEach(row => row.fill(0));
+                    scoreEl.textContent = 0;
+                    levelEl.textContent = 1;
+                    
+                    game.piece = createPiece();
+                    game.nextPiece = createPiece();
+                }
+                
+                isPaused = false;
+                statusEl.style.display = 'none';
+                lastTime = performance.now(); // Reset time to avoid instant drop
+                requestAnimationFrame(loop);
+                // Need to call Tone.start() on user interaction
+                if (Tone.context.state !== 'running') {
+                    Tone.start().then(() => console.log('Audio Context started.'));
+                }
+            } else {
+                // Pause logic
+                isPaused = true;
+                statusMessageEl.textContent = 'PAUSED';
+                startButton.textContent = 'RESUME';
+                statusEl.style.display = 'block';
+            }
+        }
+        
+        // --- Event Listeners ---
+        
+        // Keyboard controls
+        document.addEventListener('keydown', event => {
+            // Prevent scrolling
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
+                event.preventDefault();
+            }
+
+            if (isPaused) {
+                if (event.key === 'p' || event.key === 'P') {
+                    startGame(); // P to unpause
+                }
+                return;
+            }
+            
+            switch (event.key) {
+                case 'ArrowLeft':
+                case 'a':
+                    game.move(-1);
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    game.move(1);
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    game.softDrop();
+                    break;
+                case 'ArrowUp':
+                case 'w':
+                    game.rotate();
+                    break;
+                case 'p':
+                case 'P':
+                    startGame(); // P to pause
+                    break;
+            }
+            draw();
+        });
+        
+        // Start/Resume/Play Again button
+        startButton.addEventListener('click', startGame);
+
+        // --- Initialization ---
+        
+        window.onload = function() {
+            // 1. Setup Board
+            game.board = createMatrix(COLS, ROWS);
+            
+            // 2. Create initial pieces
+            game.piece = createPiece();
+            game.nextPiece = createPiece();
+            
+            // 3. Initial Draw
+            draw();
+            
+            // 4. Show initial status (PAUSED)
+            statusMessageEl.textContent = 'TETRIS TIME!';
+            startButton.textContent = 'START GAME';
+            statusEl.style.display = 'block';
+
+            // Optional: Log Firebase auth state for debugging in canvas environment
+            console.log(`App ID: ${appId}`);
+            if (initialAuthToken) {
+                console.log("Firebase token available.");
+            } else {
+                console.log("No Firebase token available.");
+            }
+        }
+        
+    </script>
