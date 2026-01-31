@@ -1,5 +1,5 @@
 firebase dose not work right now so make a guest accout its games and please downlode it!
-
+USE GEUST MODE
 view it in:
 
 https://ruslanr456.github.io/ARCADE-/
